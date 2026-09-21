@@ -44,7 +44,7 @@ export const Step7RecommendedOffer: React.FC<Step7Props> = ({
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent-text)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
           <Sparkles size={13} /> Advisory Next Step
         </div>
-        <h3 className="section-title">Step 7: Recommended ContextMuse Offer</h3>
+        <h3 className="section-title">Step 7: Recommended Agency Offer</h3>
         <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
           Select the advisory solution for this client deliverable. Recommendations assist your decision but never override auditor judgment.
         </p>

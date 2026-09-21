@@ -671,7 +671,7 @@ export const INITIAL_DIAGNOSES: Diagnosis[] = [
     ],
     severity: 'High',
     finding: 'Inquiry forms ask for 8+ required fields (e.g. full mailing address, fax, exact timeline, job budget) before initial contact.',
-    whyItMatters: 'Every additional required field reduces form completion rates by 10–25%. Buyers abandon long forms on mobile.',
+    whyItMatters: 'Extraneous required fields increase completion friction and drive visitor abandonment on mobile devices.',
     recommendedFix: 'Reduce the initial form to 3 or 4 essential fields (Name, Phone/Email, Service Needed, Zip Code). Gather additional details during follow-up.',
     exampleImprovement: 'Shorten form to: 1. Dumpster Size 2. Delivery Zip 3. Phone Number 4. Preferred Date.',
     suggestedPriority: 'fix_first',
@@ -688,9 +688,9 @@ export const INITIAL_DIAGNOSES: Diagnosis[] = [
     ],
     severity: 'High',
     finding: 'Customer reviews, ratings, and testimonials are missing from the primary conversion path or hidden on a sub-page.',
-    whyItMatters: '88% of buyers read reviews before choosing a local service. Without visible proof, visitors assume risk and look for alternatives.',
-    recommendedFix: 'Embed a high-visibility social proof strip directly beneath the hero headline, featuring real star ratings and customer quotes.',
-    exampleImprovement: 'Add: "★ 4.9/5 Rating across 140+ DFW Homeowners & Contractors" with 3 featured verified customer blurbs.',
+    whyItMatters: 'Prospective buyers look for verified customer reviews before choosing a local service provider. Without visible proof, visitors assume risk and look for alternatives.',
+    recommendedFix: 'Embed a high-visibility social proof strip directly beneath the hero headline, featuring real ratings and customer quotes.',
+    exampleImprovement: 'Add: "Verified Local Customer Reviews & Project Photos" with 3 featured verified customer blurbs.',
     suggestedPriority: 'fix_first',
     recommendedOffer: 'Homepage Conversion Blueprint',
     internalNotes: 'Directly impacts conversion rate and pricing power.',
@@ -742,7 +742,7 @@ export const INITIAL_DIAGNOSES: Diagnosis[] = [
     ],
     severity: 'Critical',
     finding: 'Mobile layout suffers from cutoffs, overlapping banners, or tiny un-clickable phone numbers.',
-    whyItMatters: 'Over 65% of local service searches occur on mobile devices. A broken mobile experience guarantees lost revenue.',
+    whyItMatters: 'Mobile visitors require thumb-accessible navigation and immediate dialing options to prevent site abandonment.',
     recommendedFix: 'Implement a mobile-first responsive container structure with a persistent "Tap to Call / Quote" bottom bar.',
     exampleImprovement: 'Add a fixed bottom action bar on mobile with two direct buttons: "Call Now" & "Get Quote".',
     suggestedPriority: 'fix_first',
@@ -890,7 +890,7 @@ export function generateDemoFixedDirectionSvg(): string {
     
     <!-- Hero Left: Copy & Value Proposition -->
     <rect x="60" y="175" width="230" height="26" rx="13" fill="#312e81" stroke="#6366f1" stroke-width="1"/>
-    <text x="175" y="192" text-anchor="middle" fill="#c7d2fe" font-family="sans-serif" font-size="11" font-weight="700">★ 4.9/5 RATING • 140+ DFW REVIEWS</text>
+    <text x="175" y="192" text-anchor="middle" fill="#c7d2fe" font-family="sans-serif" font-size="11" font-weight="700">VERIFIED LOCAL CUSTOMER PROOF</text>
     
     <text x="60" y="245" fill="#ffffff" font-family="sans-serif" font-size="34" font-weight="800">Fast, Hassle-Free Roll-Off</text>
     <text x="60" y="285" fill="#38bdf8" font-family="sans-serif" font-size="34" font-weight="800">Dumpster Rentals in DFW</text>
@@ -948,9 +948,9 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
     auditId,
     type: 'source_of_truth',
     subType: 'desktop_hero',
-    title: 'Current Homepage Hero & Header',
+    title: 'Schematic Wireframe: Current Homepage Hero & Header',
     caption: 'Current desktop hero above the fold',
-    notes: 'The current hero lacks a clear geographic tag, uses a weak motto ("Quality Dumpster Service You Can Trust"), and presents three competing action buttons with equal weight.',
+    notes: 'Schematic wireframe layout illustrating observed DOM structure. The current hero lacks a clear geographic tag, uses a weak motto ("Quality Dumpster Service You Can Trust"), and presents three competing action buttons with equal weight.',
     blob: createSvgBlob(generateDemoSourceOfTruthSvg()),
     mimeType: 'image/svg+xml',
     filename: 'dfw_rolloff_current_hero.svg',
@@ -998,7 +998,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
     auditId,
     type: 'fixed_direction',
     subType: 'desktop_hero',
-    title: 'Proposed High-Converting Homepage Hero',
+    title: 'Recommended Conversion Wireframe (Fixed Direction)',
     caption: 'Restructured hero with instant quote calculator',
     notes: 'Demonstrates immediate 5-second clarity, DFW service area confirmation, bold social proof strip, and a 3-field instant quote calculator.',
     blob: createSvgBlob(generateDemoFixedDirectionSvg()),
@@ -1099,7 +1099,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
     cityServiceArea: 'Dallas–Fort Worth Metroplex, TX',
     primaryCustomerType: 'Homeowners, Remodelers & General Contractors',
     desiredAction: 'Request quote',
-    auditorNotes: 'Strong local reputation and reliable fleet, but the website is leaking 40%+ of mobile visitors due to vague headlines, competing buttons, and hidden pricing.',
+    auditorNotes: 'Strong local reputation and reliable fleet, but the website introduces unnecessary conversion friction due to vague headlines, competing buttons, and hidden pricing.',
     status: 'Ready',
     frameworkVersion: framework.version,
     frameworkSnapshot: framework,
@@ -1117,7 +1117,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
         finding: 'The core offer and service area require too much interpretation above the fold.',
         whyItMatters: 'Visitors decide in 3–5 seconds whether they are in the right place. A company-centered headline without immediate service area confirmation forces visitors to scan around, leading to high bounce rates.',
         recommendedFix: 'Upgrade to a high-converting headline stating the exact service, speed, and location: "Fast, Hassle-Free Roll-Off Dumpster Rentals in DFW" with same-day dispatch badges.',
-        exampleImprovement: 'Feature "Same-Day Delivery Available" with a 4.9/5 star badge directly above the headline.',
+        exampleImprovement: 'Feature "Same-Day Delivery Available" with verified customer reviews directly above the headline.',
         customClientNotes: 'Consolidated from Checks #1, #2, and #3.',
         pinnedAssetId: sourceAssetId
       },
@@ -1149,7 +1149,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
         finding: 'Strong local reviews and contractor testimonials are completely missing above the fold.',
         whyItMatters: 'First-time homeowners worry about property damage and unexpected landfill overage charges. Prominent reviews instantly eliminate doubt.',
         recommendedFix: 'Add a high-visibility social proof strip right below the hero with verified quotes emphasizing driveway protection and on-time drop-off.',
-        exampleImprovement: 'Show: "★ 4.9/5 Rating across 140+ DFW Customers" + 3 verified homeowner blurbs.',
+        exampleImprovement: 'Show: "Verified Reviews & Job Photos across DFW" + 3 verified homeowner blurbs.',
         customClientNotes: 'Consolidated from Checks #16 and #17.',
         pinnedAssetId: fixedAssetId
       },
@@ -1163,7 +1163,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
         tier: 'fix_next',
         order: 4,
         finding: 'The header phone number is plain text and cannot be tapped directly on mobile devices.',
-        whyItMatters: 'Over 65% of local dumpster inquiries come from mobile devices where contractors and homeowners need one-tap dialing.',
+        whyItMatters: 'Local contractors and homeowners on job sites frequently rely on mobile devices and need immediate one-tap calling capabilities.',
         recommendedFix: 'Convert the header contact to a prominent click-to-call button with active tel: links.',
         exampleImprovement: 'Fixed bottom bar on mobile: "📞 Call (214) 555-0192" + "⚡ Get Quote".',
         customClientNotes: 'Consolidated from Checks #21 and #24.',
@@ -1179,7 +1179,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
         tier: 'fix_next',
         order: 5,
         finding: 'Missing transparent starting price ranges and "What to Expect" 3-step rental timeline.',
-        whyItMatters: 'Uncertainty about pricing or hidden drop-off fees causes prospects to bounce and check competitors.',
+        whyItMatters: 'Uncertainty about pricing or hidden drop-off fees causes prospects to leave and check competitors.',
         recommendedFix: 'Display clear container starting ranges (10yd, 15yd, 20yd, 30yd) alongside a 3-step "How It Works" diagram.',
         exampleImprovement: '1. Select Size → 2. We Deliver (Driveway Protected) → 3. Call Us for Haul Away.',
         customClientNotes: 'Consolidated from Checks #9 and #10.',
@@ -1192,10 +1192,10 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
         'Reads vague slogan "Quality Dumpster Service"',
         'Sees 3 competing buttons & no clear prices',
         'Looks for reviews or local coverage confirmation',
-        'Bounces to call another local dumpster company'
+        'Leaves to search for another local provider'
       ],
       recommendedSteps: [
-        'Visitor lands and immediately sees DFW service area & 4.9★ rating',
+        'Visitor lands and immediately sees DFW service area & verified local customer proof',
         'Understands same-day availability for 10–30 yard roll-offs',
         'Selects dumpster size & enters zip code in 3-field quote calculator',
         'Receives instant flat-rate quote and confirms delivery date',
@@ -1204,7 +1204,7 @@ export function buildDemoAudit(framework: MasterFramework): { audit: Audit; asse
       notes: 'Transitioning from passive exploratory browsing to a direct, low-friction inquiry flow.'
     },
     reportConfig: {
-      executiveSummary: 'DFW Roll-Off Solutions possesses strong local operations and great equipment, but the current website underperforms by hiding essential conversion drivers. By clarifying the hero outcome, streamlining the inquiry form from 7 fields to 3, showcasing verified homeowner reviews above the fold, and adding click-to-call mobile capabilities, DFW Roll-Off can capture an estimated 30–50% more qualified dumpster inquiries from existing web traffic.',
+      executiveSummary: 'DFW Roll-Off Solutions possesses strong local operations and great equipment, but the current website underperforms by hiding essential conversion drivers. By clarifying the hero outcome, streamlining the inquiry form from 7 fields to 3, showcasing verified homeowner reviews above the fold, and adding click-to-call mobile capabilities, DFW Roll-Off can eliminate primary drop-off points and convert higher percentages of existing website visitors into booked rentals.',
       selectedFindingIds: ['finding_1', 'finding_2', 'finding_3', 'finding_4', 'finding_5'],
       selectedSourceAssetIds: [sourceAssetId],
       selectedFixedDirectionAssetIds: [fixedAssetId],

@@ -1,5 +1,5 @@
 /**
- * Company & Account Context Data Models for ContextMuse Opportunity Engine (Stage 2)
+ * Company & Account Context Data Models for Commercial Website Audit System
  */
 
 export type CompanyRelationshipType = 'prospect' | 'existing_client';

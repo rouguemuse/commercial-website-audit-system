@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Database,
   ShieldCheck,
-  Briefcase
+  Briefcase,
+  X
 } from 'lucide-react';
 
 export type NavTab =
@@ -36,6 +37,8 @@ interface SidebarProps {
   onLoadDemoAudit?: () => void;
   includeDemo: boolean;
   onToggleIncludeDemo: (val: boolean) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,7 +49,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenBranding,
   onLoadDemoAudit,
   includeDemo,
-  onToggleIncludeDemo
+  onToggleIncludeDemo,
+  isMobileOpen,
+  onCloseMobile
 }) => {
   const branding = getAgencyBranding();
   const navItems = [
@@ -59,12 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'diagnosis' as NavTab, label: 'Diagnosis Library', icon: BookOpen },
     { id: 'checklist' as NavTab, label: 'Free Checklist', icon: CheckSquare },
     { id: 'rescue_kit' as NavTab, label: 'Rescue Kit', icon: Wrench },
-    { id: 'sales_page' as NavTab, label: 'Sales Page', icon: TrendingUp }
+    { id: 'sales_page' as NavTab, label: 'Funnel & Assets', icon: TrendingUp }
   ];
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
+    <aside className={`sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
+      <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand-badge">
           <div className="brand-icon">
             <ShieldCheck size={18} />
@@ -74,6 +79,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="brand-subtitle">Audit System</div>
           </div>
         </div>
+        {onCloseMobile && (
+          <button
+            type="button"
+            className="mobile-nav-toggle"
+            onClick={onCloseMobile}
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       <nav className="sidebar-nav">
@@ -85,7 +100,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               key={item.id}
               type="button"
               className={`nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectTab(item.id)}
+              onClick={() => {
+                onSelectTab(item.id);
+                onCloseMobile?.();
+              }}
               style={item.highlight ? { color: 'var(--accent-primary)', fontWeight: 700 } : undefined}
             >
               <Icon size={18} />

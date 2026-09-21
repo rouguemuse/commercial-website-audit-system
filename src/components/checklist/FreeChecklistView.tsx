@@ -50,7 +50,7 @@ export const FreeChecklistView: React.FC<FreeChecklistViewProps> = ({ framework 
             {answeredCount} of 30 items checked
           </div>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Derived directly from ContextMuse 30-point evaluation engine.
+            Derived directly from our 30-point heuristic evaluation engine.
           </div>
         </div>
 

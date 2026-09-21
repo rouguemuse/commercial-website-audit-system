@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Audit,
   MasterFramework,
   Diagnosis,
@@ -49,6 +49,25 @@ export interface CrawlAndAnalysisResult {
   };
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const key =
+      (typeof window !== 'undefined' && (
+        localStorage.getItem('agency_audit_secret') ||
+        localStorage.getItem('audit_secret') ||
+        (import.meta as any).env?.VITE_AUDIT_SECRET
+      )) || '';
+    if (key) {
+      headers['x-audit-key'] = key;
+      headers['Authorization'] = `Bearer ${key}`;
+    }
+  } catch {
+    // Ignore localStorage access issues
+  }
+  return headers;
+}
+
 export class AnalysisApiClient {
   translateEvidenceToPins(
     elements: EvidenceElement[],
@@ -68,22 +87,30 @@ export class AnalysisApiClient {
       );
 
       let pinNum = 1;
-      matchedElements.slice(0, 5).forEach(el => {
-        const elCenterX = el.boundingBox.pageX + el.boundingBox.width / 2;
-        const elCenterY = el.boundingBox.pageY + el.boundingBox.height / 2;
+      matchedElements.forEach(el => {
+        const elX = el.boundingBox.pageX;
+        const elY = el.boundingBox.pageY;
 
-        const relX = Math.max(5, Math.min(95, ((elCenterX - snapX) / snapWidth) * 100));
-        const relY = Math.max(5, Math.min(95, ((elCenterY - snapY) / snapHeight) * 100));
+        // Bounding box within crop boundaries
+        if (
+          elX >= snapX &&
+          elX <= snapX + snapWidth &&
+          elY >= snapY &&
+          elY <= snapY + snapHeight
+        ) {
+          const relX = ((elX - snapX) / snapWidth) * 100;
+          const relY = ((elY - snapY) / snapHeight) * 100;
 
-        pinsBySnapshot[snap.id].push({
-          id: `pin_${snap.id}_${pinNum}`,
-          number: pinNum,
-          x: Math.round(relX),
-          y: Math.round(relY),
-          title: `${el.category.toUpperCase()}: ${el.tag}`,
-          description: el.visibleText.substring(0, 120)
-        });
-        pinNum++;
+          pinsBySnapshot[snap.id].push({
+            id: `pin_${el.id}`,
+            number: pinNum,
+            x: Math.max(5, Math.min(95, Math.round(relX))),
+            y: Math.max(5, Math.min(95, Math.round(relY))),
+            title: `${pinNum}. ${el.category.toUpperCase()}: ${el.tag}`,
+            description: el.visibleText.slice(0, 120)
+          });
+          pinNum++;
+        }
       });
     });
 
@@ -104,7 +131,7 @@ export class AnalysisApiClient {
     try {
       crawlRes = await fetch('/api/crawler', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ targetUrl: audit.websiteUrl })
       });
     } catch (networkErr: any) {
@@ -134,7 +161,7 @@ export class AnalysisApiClient {
     // 2. Multimodal / Heuristics Analysis
     const analyzeRes = await fetch('/api/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         businessName: audit.businessName,
         websiteUrl: audit.websiteUrl,
@@ -161,7 +188,7 @@ export class AnalysisApiClient {
 
     const validatedScores = validateServerAnalysisResponse(analyzeData.scores, framework);
 
-    // 3. Save Snapshots & Translate Pins
+    // 3. Save Snapshots & Translate Pins (Truthfully labeled as schematic wireframes)
     const newAssets: AuditAsset[] = [];
     if (evidenceMap && evidenceMap.snapshots) {
       const pinsBySnapshot = this.translateEvidenceToPins(evidenceMap.elements, evidenceMap.snapshots);
@@ -171,11 +198,18 @@ export class AnalysisApiClient {
         
         const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
           <rect width="1440" height="900" fill="#0f172a"/>
-          <text x="50%" y="45%" fill="#cbd5e1" font-size="28" font-family="sans-serif" text-anchor="middle" font-weight="bold">
-            ${snap.sectionType.replace('_', ' ').toUpperCase()} VIEWPORT SNAPSHOT
+          <rect x="40" y="40" width="1360" height="820" rx="10" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="8,8"/>
+          <text x="50%" y="40%" fill="#94a3b8" font-size="26" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle" font-weight="700">
+            SCHEMATIC WIREFRAME PLACEHOLDER
           </text>
-          <text x="50%" y="52%" fill="#64748b" font-size="18" font-family="sans-serif" text-anchor="middle">
-            ${evidenceMap.targetUrl} • Crawled at ${new Date(evidenceMap.crawledAt).toLocaleTimeString()}
+          <text x="50%" y="47%" fill="#38bdf8" font-size="18" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle" font-weight="600">
+            ${snap.sectionType.replace('_', ' ').toUpperCase()} • Structural Layout Model
+          </text>
+          <text x="50%" y="54%" fill="#64748b" font-size="15" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle">
+            Target: ${evidenceMap.targetUrl} (Crawled at ${new Date(evidenceMap.crawledAt).toLocaleTimeString()})
+          </text>
+          <text x="50%" y="62%" fill="#e2e8f0" font-size="14" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle">
+            [Notice: Upload an authentic screenshot in Step 2 to replace this schematic layout with observed visual proof]
           </text>
         </svg>`;
 
@@ -185,12 +219,12 @@ export class AnalysisApiClient {
           auditId: audit.id,
           type: 'source_of_truth',
           subType: snap.sectionType === 'mobile_hero' ? 'mobile_hero' : 'desktop_hero',
-          title: `${snap.sectionType.replace('_', ' ').toUpperCase()}`,
-          caption: `Automated visual evidence crop from ${snap.pageUrl}`,
-          notes: `Crop rect: [${snap.cropRect.cropX}, ${snap.cropRect.cropY}, ${snap.cropRect.cropWidth}x${snap.cropRect.cropHeight}]`,
+          title: `Schematic Layout: ${snap.sectionType.replace('_', ' ').toUpperCase()}`,
+          caption: `Schematic wireframe placeholder generated from HTML DOM structure of ${snap.pageUrl}. Upload actual screenshot in Step 2 for observed visual evidence.`,
+          notes: `Structural layout model bounds: [${snap.cropRect.cropX}, ${snap.cropRect.cropY}, ${snap.cropRect.cropWidth}x${snap.cropRect.cropHeight}]`,
           blob,
           mimeType: 'image/svg+xml',
-          filename: `${snap.sectionType}.svg`,
+          filename: `${snap.sectionType}_schematic.svg`,
           width: snap.cropRect.cropWidth,
           height: snap.cropRect.cropHeight,
           createdAt: new Date().toISOString(),

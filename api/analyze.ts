@@ -1,18 +1,49 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { WebsiteEvidenceMap, AuditScoreItem, PriorityTier, AssessmentConfidence } from '../src/types';
 
-function checkAuth(req: VercelRequest): boolean {
-  const secret = process.env.AUDIT_SECRET;
-  if (!secret) return true;
-
-  const headerKey = req.headers['x-audit-key'] as string;
-  const authHeader = req.headers.authorization;
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-  return headerKey === secret || bearerToken === secret;
+export interface ApiRequest {
+  method?: string;
+  body?: any;
+  headers: Record<string, string | string[] | undefined>;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export interface ApiResponse {
+  status: (code: number) => ApiResponse;
+  json: (data: any) => ApiResponse;
+  setHeader: (name: string, value: string) => void;
+  end: () => void;
+}
+
+function checkAuth(req: ApiRequest): { authorized: boolean; reason?: string; statusCode?: number } {
+  const secret = process.env.AUDIT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (!secret) {
+    if (isProduction) {
+      return {
+        authorized: false,
+        statusCode: 503,
+        reason: 'Service Unavailable: AUDIT_SECRET environment variable is not configured on this production server.'
+      };
+    }
+    return { authorized: true };
+  }
+
+  const headerKey = (req.headers['x-audit-key'] || req.headers['X-Audit-Key']) as string;
+  const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string;
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+  if (headerKey === secret || bearerToken === secret) {
+    return { authorized: true };
+  }
+
+  return {
+    authorized: false,
+    statusCode: 401,
+    reason: 'Unauthorized: Invalid or missing audit credentials.'
+  };
+}
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -30,9 +61,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use POST.' });
   }
 
-  // 1. Authentication
-  if (!checkAuth(req)) {
-    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing audit credentials.' });
+  // 1. Authentication Check
+  const auth = checkAuth(req);
+  if (!auth.authorized) {
+    return res.status(auth.statusCode || 401).json({
+      success: false,
+      error: auth.reason || 'Unauthorized: Invalid or missing audit credentials.'
+    });
   }
 
   try {

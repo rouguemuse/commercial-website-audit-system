@@ -1,5 +1,5 @@
 /**
- * Seller & Capability Profile Data Model for ContextMuse Opportunity Engine
+ * Seller & Agency Capability Profile Data Model for Commercial Website Audit System
  */
 
 export type ServiceCategory =

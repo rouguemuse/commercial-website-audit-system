@@ -28,7 +28,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `contextmuse-audit-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `website-audit-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       setMessage({ type: 'success', text: 'Backup exported successfully with all audits, assets, and frameworks!' });

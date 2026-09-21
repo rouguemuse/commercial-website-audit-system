@@ -1,4 +1,4 @@
-﻿import type { Audit, AuditAsset, MasterFramework } from '../types';
+import type { Audit, AuditAsset, MasterFramework } from '../types';
 
 export function createFictionalDemoAudit(framework: MasterFramework): { audit: Audit; assets: AuditAsset[] } {
   const auditId = 'demo_audit_apex_commercial';
@@ -64,7 +64,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
       x: 30,
       y: 48,
       title: 'Trust & Proof Strip',
-      description: 'Prominent social proof: "★ 4.9/5 from 350+ Facilities • OSHA & NATE Certified".'
+      description: 'Prominent trust and compliance badge strip: "OSHA-Certified Technicians • Fully Insured • Verified Commercial Clients".'
     },
     {
       id: 'demo_pin_f4',
@@ -117,8 +117,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
     <text x="210" y="363" fill="#ffffff" font-size="16" font-family="sans-serif" font-weight="bold">Request Immediate Service →</text>
     <!-- Prominent Trust Strip -->
     <rect x="180" y="420" width="700" height="50" fill="#1e293b" rx="6"/>
-    <text x="200" y="452" fill="#fbbf24" font-size="16" font-family="sans-serif">★★★★★</text>
-    <text x="270" y="452" fill="#cbd5e1" font-size="14" font-family="sans-serif" font-weight="bold">4.9/5 Rating from 350+ Facilities • OSHA &amp; NATE Certified Technicians</text>
+    <text x="210" y="452" fill="#38bdf8" font-size="14" font-family="sans-serif" font-weight="bold">✓ Licensed &amp; Insured • OSHA &amp; NATE Certified Technicians • Direct Commercial Dispatch</text>
   </svg>`;
 
   const sourceAsset: AuditAsset = {
@@ -126,9 +125,9 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
     auditId,
     type: 'source_of_truth',
     subType: 'desktop_hero',
-    title: 'Existing Homepage (Desktop Viewport)',
-    caption: 'Current homepage hero with vague messaging and competing buttons',
-    notes: 'Observable evidence captured from live desktop viewport.',
+    title: 'Schematic Wireframe: Existing Homepage (Desktop Viewport)',
+    caption: 'Schematic wireframe layout illustrating existing homepage hero with vague messaging and competing buttons',
+    notes: 'Schematic wireframe model based on DOM element analysis. In live audits, replace with genuine user screenshots.',
     blob: new Blob([svgSource], { type: 'image/svg+xml' }),
     mimeType: 'image/svg+xml',
     filename: 'apex_existing_desktop.svg',
@@ -304,7 +303,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
         evidenceText: 'Header phone "(555) 234-5678" cannot be tapped directly on iOS/Android; lacks active tel: hyperlink.',
         businessImpact: 'On-site managers on mobile devices looking for emergency repair must manually copy/dial, risking lost inquiries.',
         recommendedAction: 'Convert all phone instances to tap-to-call links and add a sticky mobile bottom action bar.',
-        whyItMatters: 'Over 65% of local searches happen on mobile devices where users need immediate thumb-accessible contact.',
+        whyItMatters: 'Facility managers on active job sites frequently inspect options from mobile devices and require immediate thumb-accessible contact options.',
         recommendedFix: 'Add a persistent mobile bottom action bar with direct "Tap to Call" and "Instant Quote" buttons.',
         exampleImprovement: 'Ensure phone numbers are hyperlinked with active `tel:` links.',
         customClientNotes: '',
@@ -325,7 +324,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
         evidenceText: 'No baseline hourly rates or structured 3-step "Dispatch Timeline" provided on service pages.',
         businessImpact: 'Inquirers uncertain about dispatch turnaround or unexpected overage costs often hesitate to call.',
         recommendedAction: 'Add a 3-step dispatch process: 1. Work Order Intake → 2. Tech En Route (<2hr) → 3. Status Tracking.',
-        whyItMatters: 'Uncertainty about cost ranges or fear of hidden fees causes prospects to bounce and compare transparent competitors.',
+        whyItMatters: 'Uncertainty about cost ranges or fear of hidden fees causes prospects to leave and compare transparent competitors.',
         recommendedFix: 'Introduce transparent starting baseline rates alongside a simple 3-step "How It Works" diagram.',
         exampleImprovement: 'Display starting packages alongside 3 clear next-step icons.',
         customClientNotes: '',
@@ -342,7 +341,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
       ],
       recommendedSteps: [
         'Facility manager lands and immediately sees commercial trade & 2-hour dispatch guarantee',
-        'Reviews 4.9★ rating and OSHA/NATE certifications right below hero',
+        'Inspects verified OSHA/NATE certifications and direct trade proof right below hero',
         'Clicks prominent "Request Service" or taps 1-click mobile phone bar',
         'Enters 3-field facility intake form (Property type, issue, urgent/standard)',
         'Receives instant dispatch confirmation and work order number'
@@ -350,7 +349,7 @@ export function createFictionalDemoAudit(framework: MasterFramework): { audit: A
       notes: 'Transitioning from passive corporate brochure to high-velocity service dispatch machine.'
     },
     reportConfig: {
-      executiveSummary: 'Apex Commercial Services provides superior facility and MEP capabilities, but the website underperforms by hiding essential conversion drivers. By clarifying the hero headline, consolidating competing buttons into a single primary call-to-action, showcasing verified safety credentials above the fold, and adding 1-tap mobile dialing, Apex Commercial can capture an estimated 30–45% more qualified commercial inquiries from existing web traffic.',
+      executiveSummary: 'Apex Commercial Services provides superior facility and MEP capabilities, but the website underperforms by hiding essential conversion drivers. By clarifying the hero headline, consolidating competing buttons into a single primary call-to-action, showcasing verified safety credentials above the fold, and adding 1-tap mobile dialing, Apex Commercial can remove critical buyer friction and convert qualified commercial prospects that currently leave for clearer competitors.',
       selectedFindingIds: ['demo_finding_1', 'demo_finding_2', 'demo_finding_3', 'demo_finding_4', 'demo_finding_5'],
       selectedSourceAssetIds: [sourceAssetId],
       selectedFixedDirectionAssetIds: [fixedAssetId],

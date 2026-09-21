@@ -1,5 +1,5 @@
 {
-  "name": "contextmuse-audit-system",
+  "name": "commercial-website-audit-system",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -20,13 +20,12 @@
     "tsx": "^4.23.15"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
-    "@vercel/node": "^5.10.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "puppeteer": "^25.7.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "typescript": "^5.5.4",
-    "vite": "^5.4.3"
+    "vite": "^8.3.0"
   }
 }

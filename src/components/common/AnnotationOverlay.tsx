@@ -66,8 +66,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     if (editingPin?.id === pinId) setEditingPin(null);
   };
 
+  const isSchematic = asset.mimeType === 'image/svg+xml' || asset.title.toLowerCase().includes('schematic');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {isSchematic && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0f172a', border: '1px dashed #334155', borderRadius: 'var(--radius-sm)', padding: '8px 14px', fontSize: '0.8rem', color: '#94a3b8', flexWrap: 'wrap', gap: '8px' }}>
+          <span>📐 <strong>Schematic Viewport Layout</strong> (Structural Wireframe Representation)</span>
+          <span style={{ fontSize: '0.74rem', color: '#64748b' }}>Upload authentic screenshot in Step 2 to replace with live visual capture</span>
+        </div>
+      )}
+
       {editable && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-md)' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>

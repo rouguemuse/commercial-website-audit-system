@@ -76,7 +76,7 @@ export function generateDefaultTeaserConfig(
       name: 'Website Conversion Checkup',
       price: '$99',
       tagline: 'Get the complete 30-point diagnostic + prioritized fix schedule.',
-      ctaLink: 'https://www.contextmuse.com/custom/'
+      ctaLink: '#contact'
     },
     generatedAt: new Date().toISOString()
   };

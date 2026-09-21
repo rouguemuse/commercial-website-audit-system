@@ -479,7 +479,7 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
             </div>
 
             <p style={{ fontSize: '0.88rem', color: '#475569', marginBottom: '18px' }}>
-              The annotated screenshot below captures your live website as visitors currently experience it, with numbered markers corresponding to specific friction points.
+              The annotated layout below captures your website structure and observed friction points, with numbered markers corresponding to specific diagnostic findings.
             </p>
 
             {selectedSourceAssets.map((asset) => (

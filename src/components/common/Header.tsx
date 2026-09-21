@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { brandingConfig } from '../../config/brandingConfig';
-import { PlusCircle, Sun, Moon } from 'lucide-react';
+import { PlusCircle, Sun, Moon, Menu } from 'lucide-react';
 
 interface HeaderProps {
   onStartAudit: () => void;
   frameworkVersion: string;
   onOpenBranding?: () => void;
   onLoadDemoAudit?: () => void;
+  onToggleMobileNav?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onStartAudit,
   frameworkVersion,
   onOpenBranding,
-  onLoadDemoAudit
+  onLoadDemoAudit,
+  onToggleMobileNav
 }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('agency_theme_mode') as 'light' | 'dark') || 'light';
@@ -30,7 +32,17 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="top-header">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {onToggleMobileNav && (
+          <button
+            type="button"
+            className="mobile-nav-toggle"
+            onClick={onToggleMobileNav}
+            aria-label="Toggle navigation menu"
+          >
+            <Menu size={18} />
+          </button>
+        )}
         <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
           {brandingConfig.appName}
         </span>

@@ -170,7 +170,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h3 className="section-title">ContextMuse Product Value Ladder</h3>
+            <h3 className="section-title">Agency Product Value Ladder</h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
               All offers are derived from the 30-check diagnosis and presented contextually to clients.
             </p>

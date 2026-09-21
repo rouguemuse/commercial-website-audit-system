@@ -1,69 +1,98 @@
-import dns from 'dns';
-import { promisify } from 'util';
-
-const dnsLookup = promisify(dns.lookup);
-
-function isPrivateOrReservedIp(ip: string): boolean {
-  if (ip === '127.0.0.1' || ip === '0.0.0.0' || ip === 'localhost') return true;
-  if (ip.startsWith('10.')) return true;
-  if (ip.startsWith('192.168.')) return true;
-  if (ip.startsWith('169.254.')) return true;
-  if (ip.startsWith('127.')) return true;
-  if (ip.startsWith('100.64.') || ip.startsWith('100.127.')) return true;
-  
-  if (ip.startsWith('172.')) {
-    const parts = ip.split('.');
-    if (parts.length >= 2) {
-      const second = parseInt(parts[1], 10);
-      if (second >= 16 && second <= 31) return true;
-    }
-  }
-
-  if (ip === '::1' || ip === '::' || ip.startsWith('fe80:') || ip.startsWith('fc00:') || ip.startsWith('fd00:')) {
-    return true;
-  }
-
-  return false;
-}
-
-async function validateUrl(url: string) {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return { allowed: false, reason: 'Disallowed protocol' };
-    }
-    if (u.hostname === 'localhost' || u.hostname.includes('127.0.0.1') || u.hostname.includes('169.254.169.254')) {
-      return { allowed: false, reason: 'Loopback / Metadata target rejected' };
-    }
-    const res = await dnsLookup(u.hostname);
-    if (isPrivateOrReservedIp(res.address)) {
-      return { allowed: false, reason: `Private IP (${res.address}) blocked` };
-    }
-    return { allowed: true, ip: res.address };
-  } catch (err: any) {
-    return { allowed: false, reason: err.message };
-  }
-}
+import { isPrivateOrReservedIp, validateUrlSecurity, checkAuth } from '../api/crawler';
 
 async function runTests() {
-  console.log('🔒 RUNNING SSRF SECURITY VALIDATION SUITE');
+  console.log('🔒 RUNNING SSRF & SECURITY HARDENING VALIDATION SUITE\n');
   
   const testCases = [
-    'http://localhost:3000',
-    'http://127.0.0.1:8080',
-    'http://169.254.169.254/latest/meta-data/',
-    'http://10.0.0.1/admin',
-    'http://192.168.1.1/router',
-    'http://172.20.0.1/internal',
-    'file:///etc/passwd',
-    'ftp://example.com',
-    'https://example.com'
+    { url: 'http://localhost:3000', shouldBlock: true, desc: 'localhost hostname' },
+    { url: 'http://127.0.0.1:8080', shouldBlock: true, desc: '127.0.0.1 IPv4 loopback' },
+    { url: 'http://127.12.34.56', shouldBlock: true, desc: '127.0.0.0/8 loopback range' },
+    { url: 'http://0.0.0.0', shouldBlock: true, desc: '0.0.0.0 current network' },
+    { url: 'http://169.254.169.254/latest/meta-data/', shouldBlock: true, desc: 'AWS/cloud metadata service' },
+    { url: 'http://10.0.0.1/admin', shouldBlock: true, desc: '10.0.0.0/8 private network' },
+    { url: 'http://192.168.1.1/router', shouldBlock: true, desc: '192.168.0.0/16 private network' },
+    { url: 'http://172.16.0.1/internal', shouldBlock: true, desc: '172.16.0.0/12 private network low' },
+    { url: 'http://172.31.255.254', shouldBlock: true, desc: '172.16.0.0/12 private network high' },
+    { url: 'http://100.64.0.1', shouldBlock: true, desc: '100.64.0.0/10 CGNAT low' },
+    { url: 'http://100.127.255.254', shouldBlock: true, desc: '100.64.0.0/10 CGNAT high' },
+    { url: 'http://[::1]', shouldBlock: true, desc: 'IPv6 loopback' },
+    { url: 'http://[::ffff:127.0.0.1]', shouldBlock: true, desc: 'IPv4-mapped IPv6 loopback' },
+    { url: 'http://[::ffff:10.0.0.1]', shouldBlock: true, desc: 'IPv4-mapped IPv6 private' },
+    { url: 'http://[fe80::1]', shouldBlock: true, desc: 'IPv6 link-local' },
+    { url: 'http://[fc00::1]', shouldBlock: true, desc: 'IPv6 unique local' },
+    { url: 'http://[ff02::1]', shouldBlock: true, desc: 'IPv6 multicast' },
+    { url: 'http://metadata.google.internal', shouldBlock: true, desc: 'GCP metadata hostname' },
+    { url: 'file:///etc/passwd', shouldBlock: true, desc: 'file:// protocol' },
+    { url: 'ftp://example.com', shouldBlock: true, desc: 'ftp:// protocol' },
+    { url: 'gopher://example.com', shouldBlock: true, desc: 'gopher:// protocol' },
+    { url: 'https://example.com', shouldBlock: false, desc: 'Public website (example.com)' }
   ];
 
+  let passed = 0;
+  let failed = 0;
+
   for (const tc of testCases) {
-    const result = await validateUrl(tc);
-    console.log(`${tc} -> ${result.allowed ? '✅ ALLOWED' : '🛡️ BLOCKED'} (${result.reason || result.ip})`);
+    const res = await validateUrlSecurity(tc.url);
+    const wasBlocked = !res.valid;
+    const isCorrect = wasBlocked === tc.shouldBlock;
+
+    if (isCorrect) {
+      passed++;
+      console.log(`✅ PASS: ${tc.desc} (${tc.url}) -> ${wasBlocked ? 'BLOCKED' : 'ALLOWED'}`);
+    } else {
+      failed++;
+      console.error(`❌ FAIL: ${tc.desc} (${tc.url}) -> Expected shouldBlock=${tc.shouldBlock}, got valid=${res.valid} (${res.message})`);
+    }
   }
+
+  // Test Authentication Fail-Closed
+  console.log('\n🔑 TESTING AUTHENTICATION FAIL-CLOSED BEHAVIOR');
+  
+  // Test 1: Production mode without AUDIT_SECRET must fail closed (503)
+  const origNodeEnv = process.env.NODE_ENV;
+  const origSecret = process.env.AUDIT_SECRET;
+  
+  process.env.NODE_ENV = 'production';
+  delete process.env.AUDIT_SECRET;
+  const prodNoSecret = checkAuth({ headers: {} });
+  if (!prodNoSecret.authorized && prodNoSecret.statusCode === 503) {
+    passed++;
+    console.log('✅ PASS: Production mode without AUDIT_SECRET fails closed with 503');
+  } else {
+    failed++;
+    console.error('❌ FAIL: Production mode without AUDIT_SECRET did not fail closed', prodNoSecret);
+  }
+
+  // Test 2: Production mode with AUDIT_SECRET and invalid header must fail (401)
+  process.env.AUDIT_SECRET = 'super-secret-key-123';
+  const prodBadKey = checkAuth({ headers: { 'x-audit-key': 'wrong' } });
+  if (!prodBadKey.authorized && prodBadKey.statusCode === 401) {
+    passed++;
+    console.log('✅ PASS: Invalid credentials rejected with 401');
+  } else {
+    failed++;
+    console.error('❌ FAIL: Invalid credentials not rejected', prodBadKey);
+  }
+
+  // Test 3: Valid key accepted
+  const prodGoodKey = checkAuth({ headers: { 'x-audit-key': 'super-secret-key-123' } });
+  if (prodGoodKey.authorized) {
+    passed++;
+    console.log('✅ PASS: Valid x-audit-key authorized');
+  } else {
+    failed++;
+    console.error('❌ FAIL: Valid x-audit-key not authorized');
+  }
+
+  // Restore env
+  if (origNodeEnv) process.env.NODE_ENV = origNodeEnv; else delete process.env.NODE_ENV;
+  if (origSecret) process.env.AUDIT_SECRET = origSecret; else delete process.env.AUDIT_SECRET;
+
+  console.log(`\n========================================`);
+  console.log(`SUMMARY: ${passed} passed, ${failed} failed`);
+  console.log(`========================================`);
+
+  if (failed > 0) process.exit(1);
 }
 
 runTests();

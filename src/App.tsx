@@ -45,6 +45,7 @@ export const App: React.FC = () => {
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isBrandingOpen, setIsBrandingOpen] = useState(false);
   const [, setBrandingVersion] = useState(0);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const handleLoadDemoAudit = async () => {
     if (!framework) return;
@@ -328,11 +329,16 @@ export const App: React.FC = () => {
   if (viewMode === 'composer' && activeAudit) {
     return (
       <div className="app-container">
+        <div
+          className={`sidebar-overlay ${isMobileNavOpen ? 'active' : ''}`}
+          onClick={() => setIsMobileNavOpen(false)}
+        />
         <Sidebar
           currentTab="audits"
           onSelectTab={(tab) => {
             setViewMode('normal');
             setCurrentTab(tab);
+            setIsMobileNavOpen(false);
           }}
           auditCount={audits.length}
           onOpenBackup={() => setIsBackupOpen(true)}
@@ -340,6 +346,8 @@ export const App: React.FC = () => {
           onLoadDemoAudit={handleLoadDemoAudit}
           includeDemo={includeDemo}
           onToggleIncludeDemo={setIncludeDemo}
+          isMobileOpen={isMobileNavOpen}
+          onCloseMobile={() => setIsMobileNavOpen(false)}
         />
         <main className="main-content">
           <Header
@@ -347,6 +355,7 @@ export const App: React.FC = () => {
             frameworkVersion={framework.version}
             onOpenBranding={() => setIsBrandingOpen(true)}
             onLoadDemoAudit={handleLoadDemoAudit}
+            onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
           />
           <ReportComposer
             audit={activeAudit}
@@ -367,11 +376,16 @@ export const App: React.FC = () => {
   if (viewMode === 'wizard' && activeAudit) {
     return (
       <div className="app-container">
+        <div
+          className={`sidebar-overlay ${isMobileNavOpen ? 'active' : ''}`}
+          onClick={() => setIsMobileNavOpen(false)}
+        />
         <Sidebar
           currentTab="new_audit"
           onSelectTab={(tab) => {
             setViewMode('normal');
             setCurrentTab(tab);
+            setIsMobileNavOpen(false);
           }}
           auditCount={audits.length}
           onOpenBackup={() => setIsBackupOpen(true)}
@@ -379,6 +393,8 @@ export const App: React.FC = () => {
           onLoadDemoAudit={handleLoadDemoAudit}
           includeDemo={includeDemo}
           onToggleIncludeDemo={setIncludeDemo}
+          isMobileOpen={isMobileNavOpen}
+          onCloseMobile={() => setIsMobileNavOpen(false)}
         />
         <main className="main-content">
           <Header
@@ -386,6 +402,7 @@ export const App: React.FC = () => {
             frameworkVersion={framework.version}
             onOpenBranding={() => setIsBrandingOpen(true)}
             onLoadDemoAudit={handleLoadDemoAudit}
+            onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
           />
           <AuditWizard
             initialAudit={activeAudit}
@@ -408,9 +425,14 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
+      <div
+        className={`sidebar-overlay ${isMobileNavOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileNavOpen(false)}
+      />
       <Sidebar
         currentTab={currentTab}
         onSelectTab={(tab) => {
+          setIsMobileNavOpen(false);
           if (tab === 'new_audit') {
             handleStartNewAudit();
           } else {
@@ -430,6 +452,8 @@ export const App: React.FC = () => {
         onLoadDemoAudit={handleLoadDemoAudit}
         includeDemo={includeDemo}
         onToggleIncludeDemo={setIncludeDemo}
+        isMobileOpen={isMobileNavOpen}
+        onCloseMobile={() => setIsMobileNavOpen(false)}
       />
 
       <main className="main-content">
@@ -438,6 +462,7 @@ export const App: React.FC = () => {
           frameworkVersion={framework.version}
           onOpenBranding={() => setIsBrandingOpen(true)}
           onLoadDemoAudit={handleLoadDemoAudit}
+          onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
         />
 
         {currentTab === 'dashboard' && (

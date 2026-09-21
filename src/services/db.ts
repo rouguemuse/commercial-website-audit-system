@@ -27,7 +27,7 @@ export class AuditDatabase extends Dexie {
   actionRecommendations!: Table<ActionRecommendation, string>;
 
   constructor() {
-    super('ContextMuseAuditSystemDB');
+    super('WebsiteAuditSystemDB');
     this.version(1).stores({
       frameworks: 'id, version, updatedAt',
       diagnoses: 'id, name, category, severity, suggestedPriority, isActive',

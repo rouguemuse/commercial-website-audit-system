@@ -262,17 +262,20 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
             )}
           </div>
 
-          {/* Visual Section Snapshot with Exact Bounding Pin */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Eye size={14} color="var(--accent-primary)" />
-                Section Snapshot & Exact Element Pin
-              </div>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                {hasExactGeometry ? `Exact Geometry: [x: ${pinRelX.toFixed(1)}%, y: ${pinRelY.toFixed(1)}%]` : 'Viewport Evidence'}
-              </span>
-            </div>
+          {/* Visual Section Snapshot with Element Pin */}
+          {(() => {
+            const isSchematic = sourceAsset?.mimeType === 'image/svg+xml' || sourceAsset?.title.toLowerCase().includes('schematic');
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Eye size={14} color="var(--accent-primary)" />
+                    {isSchematic ? 'Schematic Viewport Layout (Wireframe Model)' : 'Observed Section Screenshot & Element Pin'}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {isSchematic ? 'DOM Wireframe Representation' : (hasExactGeometry ? `Exact Geometry: [x: ${pinRelX.toFixed(1)}%, y: ${pinRelY.toFixed(1)}%]` : 'Viewport Evidence')}
+                  </span>
+                </div>
 
             <div
               style={{
@@ -327,7 +330,15 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
                 #{check.number}
               </div>
             </div>
+
+            {isSchematic && (
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '4px' }}>
+                Note: Schematic layout generated from HTML analysis. Upload actual screenshots in Step 2 to display verified visual captures.
+              </div>
+            )}
           </div>
+            );
+          })()}
 
           {/* Raw DOM Evidence Text */}
           {primaryElement && (
