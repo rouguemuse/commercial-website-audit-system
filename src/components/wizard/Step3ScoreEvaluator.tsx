@@ -42,6 +42,8 @@ interface Step3Props {
   assets: AuditAsset[];
   onScoresChange: (scores: Audit['scores']) => void;
   onFindingsAutoUpdate?: (findings: any[]) => void;
+  onGoToManualMode?: () => void;
+  onLoadDemoAudit?: () => void;
 }
 
 export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
@@ -50,7 +52,9 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
   diagnoses,
   assets,
   onScoresChange,
-  onFindingsAutoUpdate
+  onFindingsAutoUpdate,
+  onGoToManualMode,
+  onLoadDemoAudit
 }) => {
   const [filterMode, setFilterMode] = useState<'review_first' | 'all' | 'strong' | 'category'>('review_first');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(framework.categories[0]?.id || 'cat_clarity');
@@ -60,7 +64,7 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
   const [editingRationaleCheckId, setEditingRationaleCheckId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [crawlProgressText, setCrawlProgressText] = useState<string | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<{ message: string; errorType?: string; recovery?: string } | null>(null);
 
   const scoreResult = calculateAuditScores(audit.scores, framework);
 
@@ -101,7 +105,11 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
         onFindingsAutoUpdate(result.consolidatedFindings);
       }
     } catch (err: any) {
-      setAnalysisError(err.message || 'Analysis failed. You can retry or review manually.');
+      setAnalysisError({
+        message: err.message || 'Analysis failed. You can retry or review manually.',
+        errorType: err.errorType,
+        recovery: err.recovery
+      });
     } finally {
       setIsAnalyzing(false);
       setCrawlProgressText(null);
@@ -158,11 +166,20 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
     const updated = { ...audit.scores };
     framework.checks.forEach((chk) => {
       const item = updated[chk.id];
-      if (item && item.confidence === 'high' && item.validationStatus === 'generated') {
-        updated[chk.id] = { ...item, validationStatus: 'validated' };
+      if (item && item.confidence === 'high' && item.validationStatus !== 'validated') {
+        item.validationStatus = 'validated';
       }
     });
     onScoresChange(updated);
+  };
+
+  // Drawer Evidence Updates
+  const handleDrawerSave = (checkId: string, updatedScoreItem: AuditScoreItem) => {
+    onScoresChange({
+      ...audit.scores,
+      [checkId]: updatedScoreItem
+    });
+    setActiveDrawerCheckId(null);
   };
 
   // Bulk Accept Active Category
@@ -178,20 +195,20 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
     onScoresChange(updated);
   };
 
-  // Add / Remove Issue Tag
-  const handleToggleTag = (checkId: string, tagName: string) => {
+  // Toggle Issue Tag
+  const handleToggleTag = (checkId: string, tagId: string) => {
     const current = audit.scores[checkId];
     if (!current) return;
-    const exists = current.tags.includes(tagName);
-    const updatedTags = exists
-      ? current.tags.filter(t => t !== tagName)
-      : [...current.tags, tagName];
+    const existingTags = current.tags || [];
+    const newTags = existingTags.includes(tagId)
+      ? existingTags.filter(t => t !== tagId)
+      : [...existingTags, tagId];
 
     onScoresChange({
       ...audit.scores,
       [checkId]: {
         ...current,
-        tags: updatedTags,
+        tags: newTags,
         validationStatus: 'modified'
       }
     });
@@ -201,8 +218,8 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
   const displayedChecks = framework.checks.filter((chk) => {
     const item = audit.scores[chk.id];
     if (filterMode === 'review_first') {
-      // Show issues (score 0/1), low confidence, insufficient evidence, or needs_review
-      return !item || item.score < 2 || item.confidence !== 'high' || item.validationStatus === 'needs_review' || item.validationStatus === 'generated';
+      // Show issues (score 0/1 or null), low confidence, insufficient evidence, or needs_review
+      return !item || item.score === null || item.score < 2 || item.confidence !== 'high' || item.validationStatus === 'needs_review' || item.validationStatus === 'generated';
     } else if (filterMode === 'strong') {
       // Show score 2 / working well
       return item && item.score === 2;
@@ -214,48 +231,74 @@ export const Step3ScoreEvaluator: React.FC<Step3Props> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Explicit Analysis Error Banner */}
+      {/* Explicit Analysis Error Banner with Full Recovery Paths */}
       {analysisError && (
         <div
           style={{
-            background: 'var(--danger-bg)',
-            border: '1px solid var(--danger-border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '16px 20px',
+            background: 'var(--danger-bg, #fef2f2)',
+            border: '1px solid var(--danger-border, #fecaca)',
+            borderRadius: 'var(--radius-lg, 12px)',
+            padding: '18px 22px',
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            flexDirection: 'column',
             gap: '12px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--danger-solid)" />
-            <div>
-              <div style={{ fontWeight: 800, color: 'var(--danger-text)', fontSize: '0.95rem' }}>
-                Analysis Failed — Retry / Review Manually
-              </div>
-              <div style={{ fontSize: '0.84rem', color: 'var(--danger-text)', opacity: 0.9 }}>
-                {analysisError} (Never silently substituting fake data)
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1 }}>
+              <AlertTriangle size={22} color="var(--danger-solid, #dc2626)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 800, color: 'var(--danger-text, #991b1b)', fontSize: '1rem' }}>
+                  {analysisError.errorType ? `Scan Blocked / Failed (${analysisError.errorType})` : 'Analysis Encountered An Issue'}
+                </div>
+                <div style={{ fontSize: '0.88rem', color: 'var(--danger-text, #991b1b)', marginTop: '4px', opacity: 0.95 }}>
+                  {analysisError.message}
+                </div>
+                {analysisError.recovery && (
+                  <div style={{ fontSize: '0.84rem', color: 'var(--text-primary, #1e293b)', background: 'rgba(255,255,255,0.7)', padding: '6px 12px', borderRadius: '6px', marginTop: '8px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                    💡 <strong>Suggested Recovery:</strong> {analysisError.recovery}
+                  </div>
+                )}
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted, #64748b)', marginTop: '6px', fontStyle: 'italic' }}>
+                  Anti-Hallucination Policy: The system will never fabricate synthetic scores or fake evidence for a failed crawl.
+                </div>
               </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setAnalysisError(null)}
-            >
-              Review Manually
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger btn-sm"
-              onClick={handleRunAnalysis}
-            >
-              <RefreshCw size={13} /> Retry Analysis
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {onGoToManualMode && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={onGoToManualMode}
+                >
+                  Switch to Manual Audit Mode
+                </button>
+              )}
+              {onLoadDemoAudit && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={onLoadDemoAudit}
+                >
+                  Load Sample Demo Audit
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setAnalysisError(null)}
+              >
+                Dismiss & Review Manually
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={handleRunAnalysis}
+              >
+                <RefreshCw size={13} /> Retry Scan
+              </button>
+            </div>
           </div>
         </div>
       )}

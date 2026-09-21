@@ -5,16 +5,23 @@ import { PlusCircle, Sun, Moon } from 'lucide-react';
 interface HeaderProps {
   onStartAudit: () => void;
   frameworkVersion: string;
+  onOpenBranding?: () => void;
+  onLoadDemoAudit?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onStartAudit, frameworkVersion }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onStartAudit,
+  frameworkVersion,
+  onOpenBranding,
+  onLoadDemoAudit
+}) => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('contextmuse_theme') as 'light' | 'dark') || 'light';
+    return (localStorage.getItem('agency_theme_mode') as 'light' | 'dark') || 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('contextmuse_theme', theme);
+    localStorage.setItem('agency_theme_mode', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -33,6 +40,30 @@ export const Header: React.FC<HeaderProps> = ({ onStartAudit, frameworkVersion }
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {onLoadDemoAudit && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onLoadDemoAudit}
+            title="Load ready-made fictional demo audit"
+            style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', borderColor: 'var(--accent-border)', color: 'var(--accent-text)' }}
+          >
+            <span>⚡ Load Demo Audit</span>
+          </button>
+        )}
+
+        {onOpenBranding && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenBranding}
+            title="Configure white-label agency name, logo, colors and contact"
+            style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>🎨 Agency Branding</span>
+          </button>
+        )}
+
         {/* Theme Toggle Button */}
         <button
           type="button"

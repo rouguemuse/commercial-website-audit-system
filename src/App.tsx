@@ -11,6 +11,9 @@ import { seedDatabaseIfEmpty } from './data/seedData';
 import { Sidebar, type NavTab } from './components/common/Sidebar';
 import { Header } from './components/common/Header';
 import { BackupModal } from './components/common/BackupModal';
+import { AgencyBrandingModal } from './components/common/AgencyBrandingModal';
+import { createFictionalDemoAudit } from './data/demoAudit';
+import { brandingConfig } from './config/brandingConfig';
 
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FrameworkView } from './components/framework/FrameworkView';
@@ -40,6 +43,19 @@ export const App: React.FC = () => {
   const [activeAssets, setActiveAssets] = useState<AuditAsset[]>([]);
   const [includeDemo, setIncludeDemo] = useState(true);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isBrandingOpen, setIsBrandingOpen] = useState(false);
+  const [, setBrandingVersion] = useState(0);
+
+  const handleLoadDemoAudit = async () => {
+    if (!framework) return;
+    const { audit: demoAudit, assets: demoAssets } = createFictionalDemoAudit(framework);
+    await auditRepository.save(demoAudit);
+    await assetRepository.bulkSave(demoAssets);
+    setAudits(prev => [demoAudit, ...prev.filter(a => a.id !== demoAudit.id)]);
+    setActiveAuditId(demoAudit.id);
+    setActiveAssets(demoAssets);
+    setViewMode('report');
+  };
 
   const loadData = async () => {
     try {
@@ -273,7 +289,7 @@ export const App: React.FC = () => {
   if (loading || !framework) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ fontWeight: 800, fontSize: '1.25rem' }}>ContextMuse Website Audit System</div>
+        <div style={{ fontWeight: 800, fontSize: '1.25rem' }}>{brandingConfig.appName}</div>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Initializing database & master framework...</div>
       </div>
     );
@@ -320,6 +336,8 @@ export const App: React.FC = () => {
           }}
           auditCount={audits.length}
           onOpenBackup={() => setIsBackupOpen(true)}
+          onOpenBranding={() => setIsBrandingOpen(true)}
+          onLoadDemoAudit={handleLoadDemoAudit}
           includeDemo={includeDemo}
           onToggleIncludeDemo={setIncludeDemo}
         />
@@ -327,6 +345,8 @@ export const App: React.FC = () => {
           <Header
             onStartAudit={handleStartNewAudit}
             frameworkVersion={framework.version}
+            onOpenBranding={() => setIsBrandingOpen(true)}
+            onLoadDemoAudit={handleLoadDemoAudit}
           />
           <ReportComposer
             audit={activeAudit}
@@ -355,6 +375,8 @@ export const App: React.FC = () => {
           }}
           auditCount={audits.length}
           onOpenBackup={() => setIsBackupOpen(true)}
+          onOpenBranding={() => setIsBrandingOpen(true)}
+          onLoadDemoAudit={handleLoadDemoAudit}
           includeDemo={includeDemo}
           onToggleIncludeDemo={setIncludeDemo}
         />
@@ -362,6 +384,8 @@ export const App: React.FC = () => {
           <Header
             onStartAudit={handleStartNewAudit}
             frameworkVersion={framework.version}
+            onOpenBranding={() => setIsBrandingOpen(true)}
+            onLoadDemoAudit={handleLoadDemoAudit}
           />
           <AuditWizard
             initialAudit={activeAudit}
@@ -402,6 +426,8 @@ export const App: React.FC = () => {
         }}
         auditCount={audits.length}
         onOpenBackup={() => setIsBackupOpen(true)}
+        onOpenBranding={() => setIsBrandingOpen(true)}
+        onLoadDemoAudit={handleLoadDemoAudit}
         includeDemo={includeDemo}
         onToggleIncludeDemo={setIncludeDemo}
       />
@@ -410,6 +436,8 @@ export const App: React.FC = () => {
         <Header
           onStartAudit={handleStartNewAudit}
           frameworkVersion={framework.version}
+          onOpenBranding={() => setIsBrandingOpen(true)}
+          onLoadDemoAudit={handleLoadDemoAudit}
         />
 
         {currentTab === 'dashboard' && (
@@ -422,6 +450,7 @@ export const App: React.FC = () => {
             onOpenDiagnosis={() => setCurrentTab('diagnosis')}
             onOpenAudit={handleOpenAuditEvaluator}
             onOpenReport={handleOpenReport}
+            onLoadDemoAudit={handleLoadDemoAudit}
           />
         )}
 
@@ -504,6 +533,12 @@ export const App: React.FC = () => {
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
         onDataRestored={loadData}
+      />
+
+      <AgencyBrandingModal
+        isOpen={isBrandingOpen}
+        onClose={() => setIsBrandingOpen(false)}
+        onBrandingUpdated={() => setBrandingVersion(v => v + 1)}
       />
     </div>
   );

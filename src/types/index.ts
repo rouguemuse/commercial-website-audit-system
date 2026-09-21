@@ -4,7 +4,9 @@ export type AuditStatus = 'Draft' | 'In Progress' | 'Ready' | 'Delivered' | 'Arc
 
 export type SeverityLevel = 'Critical' | 'High' | 'Medium' | 'Low';
 
-export type PriorityTier = 'fix_first' | 'fix_next' | 'later';
+export type PriorityTier = 'Critical' | 'High Impact' | 'Improvement' | 'fix_first' | 'fix_next' | 'later';
+
+export type EffortLevel = 'Low' | 'Medium' | 'High';
 
 export type ScoreState = 'working_well' | 'weak' | 'broken' | 'insufficient_evidence';
 
@@ -183,6 +185,7 @@ export interface WebsiteEvidenceMap {
 export interface AuditScoreItem {
   score: number | null; // 0 (broken), 1 (weak), 2 (affirmatively working), null (insufficient evidence)
   proposedScore?: number | null; // Initial AI proposed score (or null if insufficient evidence)
+  scoreState?: ScoreState;
   confidence: AssessmentConfidence;
   validationStatus: ValidationStatus;
   evidenceType?: EvidenceType;
@@ -190,6 +193,9 @@ export interface AuditScoreItem {
   evidenceRefs?: string[]; // Array of element IDs e.g. ["HOME.hero.h1", "HOME.hero.cta_primary"]
   rationale: string;
   evidence: string;
+  businessImpact?: string;
+  effort?: EffortLevel;
+  recommendedAction?: string;
   tags: string[]; // Issue tag names e.g. ["Vague", "Generic", "Formulaic phrasing"]
   evidenceAssetId?: string;
   triggeredDiagnosisIds: string[];
@@ -205,8 +211,13 @@ export interface AuditFindingItem {
   tags?: string[];
   isConsolidated?: boolean;
   tier: PriorityTier;
+  priority?: 'Critical' | 'High Impact' | 'Improvement';
+  effort?: EffortLevel;
   order: number;
   finding: string;
+  evidenceText?: string;
+  businessImpact?: string;
+  recommendedAction?: string;
   whyItMatters: string;
   recommendedFix: string;
   exampleImprovement: string;

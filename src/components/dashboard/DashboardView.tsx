@@ -24,6 +24,7 @@ interface DashboardViewProps {
   onOpenDiagnosis: () => void;
   onOpenAudit: (auditId: string) => void;
   onOpenReport: (auditId: string) => void;
+  onLoadDemoAudit?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -34,7 +35,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenFramework,
   onOpenDiagnosis,
   onOpenAudit,
-  onOpenReport
+  onOpenReport,
+  onLoadDemoAudit
 }) => {
   const activeChecksCount = framework.checks.filter(c => c.isActive).length;
   const activeDiagnosesCount = diagnoses.filter(d => d.isActive).length;
@@ -42,14 +44,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="page-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       {/* Top Banner / Headline */}
-      <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--accent-text)', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-          <Sparkles size={14} /> Master Website Rescue System
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--agency-primary, var(--accent-text))', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+            <Sparkles size={14} /> Master Website Audit & Rescue System
+          </div>
+          <h1 className="page-title">One framework. Every client report.</h1>
+          <p className="page-subtitle" style={{ maxWidth: '820px', marginTop: '8px' }}>
+            Thirty checks across six core categories evaluate website UX, credibility, and conversion mechanics — ready to brand, print, and sell.
+          </p>
         </div>
-        <h1 className="page-title">One framework. Every product.</h1>
-        <p className="page-subtitle" style={{ maxWidth: '820px', marginTop: '8px' }}>
-          Thirty checks across six categories become your audit, your checklist, your rescue kit and your sales funnel — all from the same scoring system.
-        </p>
+        {onLoadDemoAudit && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onLoadDemoAudit}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', fontWeight: 600 }}
+          >
+            <Sparkles size={16} color="var(--agency-primary, #6366f1)" />
+            Load Sample Client Audit
+          </button>
+        )}
       </div>
 
       {/* Top Metric Cards */}

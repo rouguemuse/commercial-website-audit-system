@@ -192,7 +192,11 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({
 
       {/* Active Step Content */}
       {currentStep === 1 && (
-        <Step1BusinessInfo audit={audit} onChange={handleUpdateAudit} />
+        <Step1BusinessInfo
+          audit={audit}
+          onChange={handleUpdateAudit}
+          onGoToManualMode={() => setCurrentStep(2)}
+        />
       )}
       {currentStep === 2 && (
         <Step2SourceOfTruth
@@ -208,6 +212,7 @@ export const AuditWizard: React.FC<AuditWizardProps> = ({
           diagnoses={diagnoses}
           assets={assets}
           onScoresChange={(scores) => handleUpdateAudit({ scores })}
+          onGoToManualMode={() => setCurrentStep(2)}
         />
       )}
       {currentStep === 4 && (

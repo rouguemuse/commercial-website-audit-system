@@ -166,6 +166,83 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
               </p>
             </div>
 
+            {/* 6-Field Commercial Standards: Business Impact, Effort, & Action */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-main)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Priority Tier
+                </label>
+                <select
+                  className="select"
+                  value={scoreItem.suggestedPriority || (scoreItem.score === 0 ? 'Critical' : scoreItem.score === 1 ? 'High Impact' : 'Improvement')}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    scoreItem.suggestedPriority = val;
+                    onValidateScore(check.id, scoreItem.score ?? 1, 'modified');
+                  }}
+                  style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                >
+                  <option value="Critical">🔴 Critical (Broken / Missing)</option>
+                  <option value="High Impact">🟠 High Impact (Major Leaks)</option>
+                  <option value="Improvement">🟡 Improvement (Polish / Polish)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Estimated Effort
+                </label>
+                <select
+                  className="select"
+                  value={scoreItem.effort || 'Medium'}
+                  onChange={(e) => {
+                    const val = e.target.value as any;
+                    scoreItem.effort = val;
+                    onValidateScore(check.id, scoreItem.score ?? 1, 'modified');
+                  }}
+                  style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                >
+                  <option value="Low">🟢 Low (1–2 Hours)</option>
+                  <option value="Medium">🟡 Medium (Half-Day)</option>
+                  <option value="High">🔴 High (Multi-Day)</option>
+                </select>
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Business & Conversion Impact
+                </label>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={scoreItem.businessImpact || ''}
+                  onChange={(e) => {
+                    scoreItem.businessImpact = e.target.value;
+                    onValidateScore(check.id, scoreItem.score ?? 1, 'modified');
+                  }}
+                  placeholder="e.g. Visitors cannot tell what services you offer without scrolling, leading to bounce before inquiring."
+                  style={{ fontSize: '0.82rem', padding: '6px 8px' }}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Recommended Action
+                </label>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={scoreItem.recommendedAction || scoreItem.evidence || ''}
+                  onChange={(e) => {
+                    scoreItem.recommendedAction = e.target.value;
+                    onValidateScore(check.id, scoreItem.score ?? 1, 'modified');
+                  }}
+                  placeholder="e.g. Rewrite hero H1 headline to state primary service + location within 5 seconds."
+                  style={{ fontSize: '0.82rem', padding: '6px 8px' }}
+                />
+              </div>
+            </div>
+
             {/* Issue Tags */}
             {scoreItem.tags.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>

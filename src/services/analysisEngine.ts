@@ -767,6 +767,7 @@ export function generateConsolidatedFindings(
   // Group 1: Core Offer & Headline Clarity
   const clarityChecks = lowScores.filter(([_, s]) => (s.tags || []).some(t => ['Vague', 'Ambiguous', 'Requires interpretation', 'Generic'].includes(t)));
   if (clarityChecks.length > 0) {
+    const primaryScore = clarityChecks[0][1];
     findings.push({
       id: 'finding_clarity_consolidated',
       diagnosisId: 'diag_generic_headline',
@@ -774,12 +775,17 @@ export function generateConsolidatedFindings(
       associatedCheckIds: clarityChecks.map(([id]) => id),
       tags: ['Clarity', 'Headline', 'Offer'],
       isConsolidated: true,
-      tier: 'fix_first',
+      tier: 'Critical',
+      priority: 'Critical',
+      effort: 'Low',
       order: 1,
-      finding: 'The core offer and value proposition require too much interpretation above the fold.',
+      finding: 'Primary call-to-action and core offer headline are unclear above the fold',
+      evidenceText: primaryScore?.evidence || 'Hero headline relies on abstract slogans requiring visitors to guess what is sold.',
+      businessImpact: 'Visitors may leave without inquiring because they cannot determine what the company provides within the first 5 seconds.',
+      recommendedAction: 'Rewrite the hero headline to state the exact service and tangible outcome in plain language.',
       whyItMatters: 'Visitors decide in 3–5 seconds whether they are in the right place. Abstract slogans force visitors to guess what the company provides, driving high bounce rates.',
       recommendedFix: 'Upgrade to a high-converting headline stating the exact service, target audience, and tangible outcome.',
-      exampleImprovement: 'Before: "Transforming tomorrow through innovation" → After: "Purpose-built project tracking for high-velocity software teams."',
+      exampleImprovement: 'Before: "Transforming tomorrow through innovation" → After: "Commercial Facility Maintenance & Fast Dispatch Across the Metro Area."',
       customClientNotes: ''
     });
   }
@@ -787,6 +793,7 @@ export function generateConsolidatedFindings(
   // Group 2: Action Engine & Form Friction
   const actionChecks = lowScores.filter(([_, s]) => (s.tags || []).some(t => ['Competing', 'Form friction', 'Too many choices', 'Friction'].includes(t)));
   if (actionChecks.length > 0) {
+    const primaryScore = actionChecks[0][1];
     findings.push({
       id: 'finding_action_consolidated',
       diagnosisId: 'diag_competing_ctas',
@@ -794,12 +801,17 @@ export function generateConsolidatedFindings(
       associatedCheckIds: actionChecks.map(([id]) => id),
       tags: ['Action', 'CTA', 'Friction'],
       isConsolidated: true,
-      tier: 'fix_first',
+      tier: 'High Impact',
+      priority: 'High Impact',
+      effort: 'Low',
       order: 2,
-      finding: 'Competing action buttons and form friction divide focus and stall inquiries.',
+      finding: 'Multiple competing buttons appear above the fold without a clear primary conversion step',
+      evidenceText: primaryScore?.evidence || 'Three or more competing buttons/links with equal visual weight observed in header and hero.',
+      businessImpact: 'Prospective clients experience decision friction and hesitate rather than taking the next step.',
+      recommendedAction: 'Consolidate competing options into one high-contrast primary "Request a Quote" button.',
       whyItMatters: 'When presented with multiple equal choices and passive links (Explore, Learn More), visitors experience analysis paralysis.',
       recommendedFix: 'Establish ONE high-contrast primary conversion action paired with a low-friction intake path.',
-      exampleImprovement: 'Consolidate 3 competing nav links into a single prominent "Start Free Trial" or "Request Quote" button.',
+      exampleImprovement: 'Consolidate competing nav links into a single prominent "Request a Quote" button.',
       customClientNotes: ''
     });
   }
@@ -807,6 +819,7 @@ export function generateConsolidatedFindings(
   // Group 3: Social Proof & Trust Signals
   const proofChecks = lowScores.filter(([_, s]) => (s.tags || []).some(t => ['Missing social proof', 'Below the fold', 'Stock/generic proof'].includes(t)));
   if (proofChecks.length > 0) {
+    const primaryScore = proofChecks[0][1];
     findings.push({
       id: 'finding_proof_consolidated',
       diagnosisId: 'diag_missing_social_proof',
@@ -814,9 +827,14 @@ export function generateConsolidatedFindings(
       associatedCheckIds: proofChecks.map(([id]) => id),
       tags: ['Trust', 'Reviews', 'Social Proof'],
       isConsolidated: true,
-      tier: 'fix_first',
+      tier: 'High Impact',
+      priority: 'High Impact',
+      effort: 'Medium',
       order: 3,
-      finding: 'Strong local reviews and authentic project imagery are buried below the fold.',
+      finding: 'Credibility signals and customer proof are missing or buried below the fold',
+      evidenceText: primaryScore?.evidence || 'No customer reviews, ratings, or verified trust badges visible in the primary viewport.',
+      businessImpact: 'First-time visitors may doubt company reliability and leave to compare alternatives with visible reviews.',
+      recommendedAction: 'Place a verified customer review badge or rating summary immediately below the primary hero action.',
       whyItMatters: 'First-time buyers worry about reliability and risk. Missing visible proof above the fold increases perceived risk.',
       recommendedFix: 'Embed a high-visibility social proof strip right below the hero headline with verified ratings and authentic photos.',
       exampleImprovement: 'Add "★ 4.9/5 from 200+ clients" directly below the hero CTA.',
@@ -827,6 +845,7 @@ export function generateConsolidatedFindings(
   // Group 4: Pricing & Process Transparency
   const pricingChecks = lowScores.filter(([_, s]) => (s.tags || []).some(t => ['Unclear next step', 'Missing'].includes(t)));
   if (pricingChecks.length > 0) {
+    const primaryScore = pricingChecks[0][1];
     findings.push({
       id: 'finding_pricing_consolidated',
       diagnosisId: 'diag_unclear_pricing_process',
@@ -834,12 +853,17 @@ export function generateConsolidatedFindings(
       associatedCheckIds: pricingChecks.map(([id]) => id),
       tags: ['Pricing', 'Process'],
       isConsolidated: true,
-      tier: 'fix_next',
+      tier: 'Improvement',
+      priority: 'Improvement',
+      effort: 'Medium',
       order: 4,
-      finding: 'Pricing opacity and missing "How It Works" steps create purchasing hesitation.',
+      finding: 'Missing transparent pricing ranges or a clear "How It Works" step-by-step process',
+      evidenceText: primaryScore?.evidence || 'No baseline pricing guidance or structured 3-step process explained on key pages.',
+      businessImpact: 'Visitors uncertain of process or timeline often bounce rather than risk contacting sales without cost context.',
+      recommendedAction: 'Add a 3-step process overview showing what happens after an inquiry is submitted.',
       whyItMatters: 'Uncertainty about cost ranges or fear of hidden fees causes prospects to bounce and compare transparent competitors.',
       recommendedFix: 'Introduce transparent starting baseline rates alongside a simple 3-step "How It Works" diagram.',
-      exampleImprovement: 'Display "Packages starting at $450" alongside "1. Tell us your goals → 2. Scope confirmed → 3. Live in 5 days".',
+      exampleImprovement: 'Display starting packages alongside "1. Tell us your goals → 2. Scope confirmed → 3. Project kicked off".',
       customClientNotes: ''
     });
   }
@@ -847,6 +871,7 @@ export function generateConsolidatedFindings(
   // Group 5: Mobile Interaction
   const mobileChecks = lowScores.filter(([_, s]) => (s.tags || []).some(t => ['Mobile issue', 'Interaction issue'].includes(t)));
   if (mobileChecks.length > 0) {
+    const primaryScore = mobileChecks[0][1];
     findings.push({
       id: 'finding_mobile_consolidated',
       diagnosisId: 'diag_mobile_friction',
@@ -854,9 +879,14 @@ export function generateConsolidatedFindings(
       associatedCheckIds: mobileChecks.map(([id]) => id),
       tags: ['Mobile', 'Tap-to-call'],
       isConsolidated: true,
-      tier: 'fix_next',
+      tier: 'Critical',
+      priority: 'Critical',
+      effort: 'Low',
       order: 5,
-      finding: 'Mobile experience lacks 1-tap phone dialing and streamlined vertical layout.',
+      finding: 'Mobile interface lacks one-tap phone dialing or thumb-friendly call-to-actions',
+      evidenceText: primaryScore?.evidence || 'Phone numbers rendered as plain unclickable text or buried behind mobile menus.',
+      businessImpact: 'Mobile visitors on urgent timelines may abandon the site rather than manually copy/typing phone numbers.',
+      recommendedAction: 'Hyperlink all phone numbers with active tel: links and add a sticky bottom mobile action bar.',
       whyItMatters: 'Over 65% of local searches happen on mobile devices where users need immediate thumb-accessible contact.',
       recommendedFix: 'Add a persistent mobile bottom action bar with direct "Tap to Call" and "Instant Quote" buttons.',
       exampleImprovement: 'Ensure phone numbers are hyperlinked with active `tel:` links.',

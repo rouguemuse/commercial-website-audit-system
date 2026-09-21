@@ -3,7 +3,7 @@ import type { Audit, AuditAsset, MasterFramework } from '../../types';
 import { calculateAuditScores } from '../../utils/scoreCalculator';
 import { AnnotationOverlay } from '../common/AnnotationOverlay';
 import { ScoreBadge } from '../common/ScoreBadge';
-import { brandingConfig } from '../../config/brandingConfig';
+import { getAgencyBranding } from '../../config/brandingConfig';
 import {
   Printer,
   ArrowLeft,
@@ -17,7 +17,10 @@ import {
   ArrowRight,
   ExternalLink,
   Layers,
-  Zap
+  Zap,
+  Download,
+  FileSpreadsheet,
+  FileCode
 } from 'lucide-react';
 
 interface ClientReportViewProps {
@@ -33,6 +36,7 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
   onBackToAudit,
   onOpenComposer
 }) => {
+  const agency = getAgencyBranding();
   const framework = audit.frameworkSnapshot;
   const scoreResult = calculateAuditScores(audit.scores, framework);
   const reportConfig = audit.reportConfig;
@@ -41,8 +45,8 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
     reportConfig.selectedFindingIds.length === 0 || reportConfig.selectedFindingIds.includes(f.id)
   );
 
-  const fixFirstFindings = selectedFindings.filter(f => f.tier === 'fix_first');
-  const fixNextFindings = selectedFindings.filter(f => f.tier === 'fix_next');
+  const fixFirstFindings = selectedFindings.filter(f => f.priority === 'Critical' || f.tier === 'Critical' || f.tier === 'fix_first');
+  const fixNextFindings = selectedFindings.filter(f => f.priority === 'High Impact' || f.tier === 'High Impact' || f.tier === 'fix_next');
 
   const selectedSourceAssets = assets.filter(
     a => a.type === 'source_of_truth' && (reportConfig.selectedSourceAssetIds.length === 0 || reportConfig.selectedSourceAssetIds.includes(a.id))
@@ -56,9 +60,82 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
     window.print();
   };
 
-  const footerText = brandingConfig.footerMetadataTemplate
-    .replace('{version}', `v${audit.frameworkVersion}`)
-    .replace('{date}', new Date(audit.updatedAt).toLocaleDateString());
+  const handleExportJson = () => {
+    const filename = `${(audit.businessName || 'audit').toLowerCase().replace(/[^a-z0-9]/g, '_')}_audit_report.json`;
+    const exportData = {
+      auditMetadata: {
+        id: audit.id,
+        businessName: audit.businessName,
+        websiteUrl: audit.websiteUrl,
+        industry: audit.industry,
+        serviceArea: audit.cityServiceArea,
+        overallScore: scoreResult.totalScore,
+        maxScore: scoreResult.maxScore,
+        rescueLevel: scoreResult.rescueLevel,
+        date: audit.updatedAt
+      },
+      agency: {
+        name: agency.agencyName,
+        tagline: agency.tagline,
+        email: agency.email,
+        phone: agency.phone,
+        website: agency.website
+      },
+      executiveSummary: reportConfig.executiveSummary,
+      categoryScores: scoreResult.categoryResults.map(c => ({
+        categoryNumber: c.category.number,
+        categoryName: c.category.name,
+        earned: c.earned,
+        totalPossible: c.totalPossible,
+        percentage: c.percentage,
+        status: c.status
+      })),
+      prioritizedFindings: selectedFindings.map(f => ({
+        id: f.id,
+        finding: f.finding,
+        priority: f.priority || (f.tier === 'fix_first' ? 'Critical' : f.tier === 'fix_next' ? 'High Impact' : 'Improvement'),
+        effort: f.effort || 'Medium',
+        evidence: f.evidenceText || '',
+        businessImpact: f.businessImpact || f.whyItMatters,
+        recommendedAction: f.recommendedAction || f.recommendedFix
+      })),
+      recommendedOffer: reportConfig.recommendedOffer
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    const filename = `${(audit.businessName || 'audit').toLowerCase().replace(/[^a-z0-9]/g, '_')}_prioritized_findings.csv`;
+    const escapeCsv = (str: string = '') => `"${str.replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+
+    const headers = ['Priority', 'Effort', 'Finding', 'Evidence', 'Business Impact', 'Recommended Action'];
+    const rows = selectedFindings.map(f => [
+      escapeCsv(f.priority || (f.tier === 'fix_first' ? 'Critical' : f.tier === 'fix_next' ? 'High Impact' : 'Improvement')),
+      escapeCsv(f.effort || 'Medium'),
+      escapeCsv(f.finding),
+      escapeCsv(f.evidenceText || ''),
+      escapeCsv(f.businessImpact || f.whyItMatters),
+      escapeCsv(f.recommendedAction || f.recommendedFix)
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const footerText = `${agency.agencyName} • ${agency.website} • Prepared for ${audit.businessName} • ${new Date(audit.updatedAt).toLocaleDateString()}`;
 
   return (
     <div style={{ background: '#e2e8f0', minHeight: '100vh', padding: '32px 16px' }}>
@@ -71,6 +148,8 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
           background: '#ffffff',
           padding: '14px 20px',
           borderRadius: 'var(--radius-lg)',
@@ -79,19 +158,39 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => onBackToAudit(audit.id)}>
-            <ArrowLeft size={14} /> Audit Validation Queue
+            <ArrowLeft size={14} /> Audit Queue
           </button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenComposer(audit.id)}>
-            <SlidersHorizontal size={14} /> Report Composer
+            <SlidersHorizontal size={14} /> Composer
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            Formatted for US Letter Print / PDF
-          </span>
-          <button type="button" className="btn btn-primary btn-sm" onClick={handlePrint}>
-            <Printer size={15} /> Print / Export PDF
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleExportCsv}
+            title="Export Prioritized Findings as CSV"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <FileSpreadsheet size={14} /> Export CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleExportJson}
+            title="Export Full Audit Data as JSON"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <FileCode size={14} /> Export JSON
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handlePrint}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--agency-primary, #0f172a)' }}
+          >
+            <Printer size={15} /> Print / Save as PDF
           </button>
         </div>
       </div>
@@ -104,18 +203,27 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
         {/* ========================================================= */}
         <div className="report-page" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '24px', marginBottom: '40px' }}>
-              <div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#0f172a' }}>
-                  {brandingConfig.companyName}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: '2px' }}>
-                  Website Rescue & Conversion Optimization
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid var(--agency-primary, #0f172a)', paddingBottom: '24px', marginBottom: '40px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                {agency.logoUrl && (
+                  <img
+                    src={agency.logoUrl}
+                    alt={agency.agencyName}
+                    style={{ height: '48px', maxWidth: '160px', objectFit: 'contain' }}
+                  />
+                )}
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--agency-primary, #0f172a)' }}>
+                    {agency.agencyName}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: '2px' }}>
+                    {agency.tagline || 'Website Conversion & UX Diagnostics'}
+                  </div>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span className="badge badge-accent" style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
-                  Deliverable
+                <span className="badge badge-accent" style={{ fontSize: '0.85rem', padding: '6px 14px', background: 'var(--agency-primary, #0f172a)', color: '#fff' }}>
+                  Client Deliverable
                 </span>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
                   {new Date(audit.updatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -124,8 +232,8 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
             </div>
 
             <div style={{ marginTop: '20px' }}>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
-                Standardized 30-Point Diagnostic Checkup
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--agency-accent, var(--accent-primary))', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                {agency.reportTitle || 'Standardized 30-Point Diagnostic Checkup'}
               </div>
               <h1 style={{ fontSize: '2.6rem', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.15, color: '#0f172a' }}>
                 Website Conversion Checkup
@@ -294,35 +402,53 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
                 style={{
                   border: '1px solid #e2e8f0',
                   borderRadius: 'var(--radius-md)',
-                  padding: '18px 20px',
+                  padding: '20px 22px',
                   background: '#ffffff',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px'
+                  gap: '10px'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--danger-solid)', color: '#fff', fontWeight: 800, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {idx + 1}
-                  </span>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                    {f.finding}
-                  </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--danger-solid, #dc2626)', color: '#fff', fontWeight: 800, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {idx + 1}
+                    </span>
+                    <h3 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#0f172a' }}>
+                      {f.finding}
+                    </h3>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <span className="badge badge-rose" style={{ fontSize: '0.72rem' }}>
+                      {f.priority || 'Critical'}
+                    </span>
+                    <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
+                      {f.effort || 'Medium'} Effort
+                    </span>
+                  </div>
                 </div>
+
+                {f.evidenceText && (
+                  <div style={{ fontSize: '0.85rem', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid #e2e8f0' }}>
+                    <strong style={{ color: '#0f172a' }}>Observed Evidence: </strong>
+                    {f.evidenceText}
+                  </div>
+                )}
 
                 <div style={{ fontSize: '0.88rem', color: '#475569', background: '#f8fafc', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
-                  <strong style={{ color: '#0f172a' }}>Why it matters: </strong>
-                  {f.whyItMatters}
+                  <strong style={{ color: '#0f172a' }}>Business & Conversion Impact: </strong>
+                  {f.businessImpact || f.whyItMatters}
                 </div>
 
-                <div style={{ fontSize: '0.88rem', color: 'var(--accent-text)', background: 'var(--accent-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
-                  <strong>Recommended Fix: </strong>
-                  {f.recommendedFix}
+                <div style={{ fontSize: '0.88rem', color: 'var(--agency-primary, #0f172a)', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
+                  <strong style={{ color: 'var(--agency-primary, #1e3a8a)' }}>Recommended Action: </strong>
+                  {f.recommendedAction || f.recommendedFix}
                 </div>
 
                 {f.exampleImprovement && (
                   <div style={{ fontSize: '0.82rem', color: '#64748b', fontStyle: 'italic', paddingLeft: '4px' }}>
-                    <strong>Example: </strong>{f.exampleImprovement}
+                    <strong>Implementation Example: </strong>{f.exampleImprovement}
                   </div>
                 )}
               </div>
@@ -540,7 +666,7 @@ export const ClientReportView: React.FC<ClientReportViewProps> = ({
 
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  Questions or ready to schedule? Contact <strong>{brandingConfig.supportEmail}</strong>
+                  Questions or ready to schedule? Contact <strong>{agency.email}</strong>
                 </div>
                 <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--accent-primary)' }}>
                   {reportConfig.recommendedOffer.ctaText} →

@@ -1,5 +1,5 @@
 import React from 'react';
-import { brandingConfig } from '../../config/brandingConfig';
+import { brandingConfig, getAgencyBranding } from '../../config/brandingConfig';
 import {
   LayoutDashboard,
   Building2,
@@ -32,6 +32,8 @@ interface SidebarProps {
   onSelectTab: (tab: NavTab) => void;
   auditCount: number;
   onOpenBackup: () => void;
+  onOpenBranding?: () => void;
+  onLoadDemoAudit?: () => void;
   includeDemo: boolean;
   onToggleIncludeDemo: (val: boolean) => void;
 }
@@ -41,9 +43,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   auditCount,
   onOpenBackup,
+  onOpenBranding,
+  onLoadDemoAudit,
   includeDemo,
   onToggleIncludeDemo
 }) => {
+  const branding = getAgencyBranding();
   const navItems = [
     { id: 'dashboard' as NavTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'companies' as NavTab, label: 'Companies Directory', icon: Building2, highlight: false },
@@ -65,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ShieldCheck size={18} />
           </div>
           <div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, lineHeight: 1.1 }}>ContextMuse</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, lineHeight: 1.1 }}>{branding.agencyName}</div>
             <div className="brand-subtitle">Audit System</div>
           </div>
         </div>
@@ -101,6 +106,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Include Demo in Metrics</span>
         </label>
 
+        {onOpenBranding && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ width: '100%', justifyContent: 'flex-start', gap: '8px' }}
+            onClick={onOpenBranding}
+          >
+            <span>🎨 Agency Branding</span>
+          </button>
+        )}
+
         <button
           type="button"
           className="btn btn-secondary btn-sm"
@@ -112,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
-          {brandingConfig.tagline}
+          {branding.tagline}
         </div>
       </div>
     </aside>

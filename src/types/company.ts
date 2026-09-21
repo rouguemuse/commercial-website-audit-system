@@ -25,6 +25,7 @@ export interface Company {
   clientSince?: string; // Optional date for existing clients
   engagementNotes?: string; // Current retainer / past project context
   notes?: string;
+  customFields?: Record<string, any>;
   isArchived?: boolean;
   createdAt: string;
   updatedAt: string;

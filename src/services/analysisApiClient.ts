@@ -1,18 +1,17 @@
-import type {
+﻿import type {
   Audit,
   MasterFramework,
   Diagnosis,
   AuditAsset,
   AuditScoreItem,
   AuditFindingItem,
-  PatternInsight,
   WebsiteEvidenceMap,
   EvidenceElement,
   SectionSnapshotData,
   AnnotationPin
 } from '../types';
-import { runPreAuditAnalysis, type AnalysisEngineResult } from './analysisEngine';
 import { db } from './db';
+import { generateConsolidatedFindings, detectWebsitePatterns } from './analysisEngine';
 
 export class AnalysisFailedError extends Error {
   constructor(message: string) {
@@ -21,102 +20,76 @@ export class AnalysisFailedError extends Error {
   }
 }
 
-/**
- * Validates that server response contains valid check evaluations matching framework schema.
- * Supports 4-state scoring: 0, 1, 2, or null (insufficient evidence).
- */
-function validateServerAnalysisResponse(
-  rawScores: Record<string, any>,
-  framework: MasterFramework
-): Record<string, AuditScoreItem> {
-  const validated: Record<string, AuditScoreItem> = {};
-  const validCheckIds = new Set(framework.checks.map(c => c.id));
-
-  Object.entries(rawScores).forEach(([checkId, item]) => {
-    if (!validCheckIds.has(checkId)) {
-      return;
-    }
-
-    const rawScore = typeof item.score === 'number' ? item.score : (item.score === null ? null : 1);
-    const score = (rawScore === null || [0, 1, 2].includes(rawScore)) ? rawScore : 1;
-    const confidence = ['high', 'medium', 'low', 'insufficient_evidence'].includes(item.confidence)
-      ? item.confidence
-      : (score === null ? 'insufficient_evidence' : 'medium');
-
-    validated[checkId] = {
-      score,
-      proposedScore: score,
-      confidence,
-      validationStatus: (confidence === 'insufficient_evidence' || score === null) ? 'needs_review' : 'generated',
-      evidenceType: item.evidenceType || 'structural',
-      evidenceSource: item.evidenceSource || 'Analysis Assessment',
-      evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
-      rationale: item.rationale || 'Assessment evaluated against criteria.',
-      evidence: item.evidence || 'Observed on site.',
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      triggeredDiagnosisIds: Array.isArray(item.triggeredDiagnosisIds) ? item.triggeredDiagnosisIds : [],
-      suggestedFinding: item.suggestedFinding || '',
-      suggestedPriority: item.suggestedPriority || 'fix_next'
-    };
-  });
-
-  if (Object.keys(validated).length === 0) {
-    throw new AnalysisFailedError('Server returned an empty or malformed score set.');
+export class CrawlFailedError extends Error {
+  errorType: string;
+  statusCode: number;
+  recovery: string;
+  constructor(message: string, errorType: string, statusCode: number, recovery: string) {
+    super(message);
+    this.name = 'CrawlFailedError';
+    this.errorType = errorType;
+    this.statusCode = statusCode;
+    this.recovery = recovery;
   }
-
-  return validated;
 }
 
-export interface CrawlAndAnalysisResult extends AnalysisEngineResult {
+export interface CrawlAndAnalysisResult {
+  updatedScores: Record<string, AuditScoreItem>;
+  consolidatedFindings: AuditFindingItem[];
   evidenceMap?: WebsiteEvidenceMap;
-  newAssets?: AuditAsset[];
+  newAssets: AuditAsset[];
+  summaryStats: {
+    totalChecks: number;
+    highConfidenceCount: number;
+    needsConfirmationCount: number;
+    insufficientEvidenceCount: number;
+    potentialIssuesCount: number;
+    suggestedFindingsCount: number;
+    provisionalAudit: boolean;
+  };
 }
 
 export class AnalysisApiClient {
-  /**
-   * Deterministically converts page-space element bounding boxes and snapshot crop rects
-   * into exact relative pins on the section snapshot image.
-   */
   translateEvidenceToPins(
     elements: EvidenceElement[],
     snapshots: SectionSnapshotData[]
   ): Record<string, AnnotationPin[]> {
     const pinsBySnapshot: Record<string, AnnotationPin[]> = {};
 
-    elements.forEach((el, idx) => {
-      const snapId = el.associatedSnapshotId || 'snap_desktop_hero';
-      const snap = snapshots.find(s => s.id === snapId);
-      if (!snap || !snap.cropRect) return;
+    snapshots.forEach(snap => {
+      pinsBySnapshot[snap.id] = [];
+      const snapWidth = snap.cropRect.cropWidth || 1440;
+      const snapHeight = snap.cropRect.cropHeight || 900;
+      const snapX = snap.cropRect.cropX || 0;
+      const snapY = snap.cropRect.cropY || 0;
 
-      const { pageX, pageY, width, height } = el.boundingBox;
-      const { cropX, cropY, cropWidth, cropHeight } = snap.cropRect;
+      const matchedElements = elements.filter(
+        el => el.associatedSnapshotId === snap.id || (el.viewport === snap.viewport && el.isVisible)
+      );
 
-      if (cropWidth <= 0 || cropHeight <= 0) return;
+      let pinNum = 1;
+      matchedElements.slice(0, 5).forEach(el => {
+        const elCenterX = el.boundingBox.pageX + el.boundingBox.width / 2;
+        const elCenterY = el.boundingBox.pageY + el.boundingBox.height / 2;
 
-      const relX = Math.max(5, Math.min(95, (((pageX + width / 2) - cropX) / cropWidth) * 100));
-      const relY = Math.max(5, Math.min(95, (((pageY + height / 2) - cropY) / cropHeight) * 100));
+        const relX = Math.max(5, Math.min(95, ((elCenterX - snapX) / snapWidth) * 100));
+        const relY = Math.max(5, Math.min(95, ((elCenterY - snapY) / snapHeight) * 100));
 
-      if (!pinsBySnapshot[snapId]) pinsBySnapshot[snapId] = [];
-
-      pinsBySnapshot[snapId].push({
-        id: `pin_${el.id}_${Date.now()}`,
-        number: idx + 1,
-        x: Math.round(relX * 10) / 10,
-        y: Math.round(relY * 10) / 10,
-        title: `${el.tag}: ${el.category.toUpperCase()}`,
-        description: el.visibleText.substring(0, 120)
+        pinsBySnapshot[snap.id].push({
+          id: `pin_${snap.id}_${pinNum}`,
+          number: pinNum,
+          x: Math.round(relX),
+          y: Math.round(relY),
+          title: `${el.category.toUpperCase()}: ${el.tag}`,
+          description: el.visibleText.substring(0, 120)
+        });
+        pinNum++;
       });
     });
 
     return pinsBySnapshot;
   }
 
-  /**
-   * Complete End-to-End Pipeline:
-   * 1. Calls SSRF-hardened /api/crawler (Multi-page crawl, DOM evidence map, section snapshots).
-   * 2. Calls /api/analyze with evidenceMap (Multimodal evaluation returning 4-state scores & evidenceRefs).
-   * 3. Maps evidenceRefs -> Exact crop-relative pins -> Saves section snapshots to IndexedDB Blobs.
-   */
   async crawlAndAnalyzeWebsite(
     audit: Audit,
     framework: MasterFramework,
@@ -124,141 +97,184 @@ export class AnalysisApiClient {
     assets: AuditAsset[],
     onProgress?: (status: string) => void
   ): Promise<CrawlAndAnalysisResult> {
-    try {
-      if (onProgress) onProgress('SSRF-Safe Multi-Page Crawl & Evidence Capture...');
+    if (onProgress) onProgress('Scanning website and discovering priority pages...');
 
-      // 1. Multi-Page Headless Crawl
-      let evidenceMap: WebsiteEvidenceMap | undefined;
-      const crawlRes = await fetch('/api/crawler', {
+    // 1. Multi-Page Headless Crawl (Up to 5 pages)
+    let crawlRes: Response;
+    try {
+      crawlRes = await fetch('/api/crawler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetUrl: audit.websiteUrl })
       });
-
-      if (crawlRes.ok) {
-        const crawlData = await crawlRes.json();
-        evidenceMap = crawlData.evidenceMap;
-      }
-
-      if (onProgress) onProgress('Evaluating 30-Check Conversion Framework & Voice...');
-
-      // 2. Multimodal AI Analysis
-      const analyzeRes = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessName: audit.businessName,
-          websiteUrl: audit.websiteUrl,
-          industry: audit.industry,
-          cityServiceArea: audit.cityServiceArea,
-          primaryCustomerType: audit.primaryCustomerType,
-          desiredAction: audit.desiredAction,
-          auditorNotes: audit.auditorNotes,
-          brandVoiceSample: audit.brandVoiceSample,
-          frameworkChecks: framework.checks,
-          evidenceMap
-        })
-      });
-
-      if (!analyzeRes.ok) {
-        throw new AnalysisFailedError(`Server analysis returned status ${analyzeRes.status}`);
-      }
-
-      const analyzeData = await analyzeRes.json();
-      if (!analyzeData.success || !analyzeData.scores) {
-        throw new AnalysisFailedError(analyzeData.error || 'Invalid analysis response payload');
-      }
-
-      const validatedScores = validateServerAnalysisResponse(analyzeData.scores, framework);
-
-      // 3. Translate Element Bounding Boxes to Exact Pins on Section Snapshots
-      const newAssets: AuditAsset[] = [];
-      if (evidenceMap && evidenceMap.snapshots) {
-        const pinsBySnapshot = this.translateEvidenceToPins(evidenceMap.elements, evidenceMap.snapshots);
-
-        for (const snap of evidenceMap.snapshots) {
-          const pins = pinsBySnapshot[snap.id] || [];
-          
-          // Create SVG preview Blob representing section snapshot
-          const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
-            <rect width="1440" height="900" fill="#0f172a"/>
-            <text x="50%" y="45%" fill="#cbd5e1" font-size="28" font-family="sans-serif" text-anchor="middle" font-weight="bold">
-              ${snap.sectionType.replace('_', ' ').toUpperCase()} VIEWPORT SNAPSHOT
-            </text>
-            <text x="50%" y="52%" fill="#64748b" font-size="18" font-family="sans-serif" text-anchor="middle">
-              ${evidenceMap.targetUrl} • Crawled at ${new Date(evidenceMap.crawledAt).toLocaleTimeString()}
-            </text>
-          </svg>`;
-
-          const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-          const newAsset: AuditAsset = {
-            id: `asset_${snap.id}_${Date.now()}`,
-            auditId: audit.id,
-            type: 'source_of_truth',
-            subType: snap.sectionType === 'mobile_hero' ? 'mobile_hero' : 'desktop_hero',
-            title: `${snap.sectionType.replace('_', ' ').toUpperCase()}`,
-            caption: `Automated visual evidence crop from ${snap.pageUrl}`,
-            notes: `Crop rect: [${snap.cropRect.cropX}, ${snap.cropRect.cropY}, ${snap.cropRect.cropWidth}x${snap.cropRect.cropHeight}]`,
-            blob,
-            mimeType: 'image/svg+xml',
-            filename: `${snap.sectionType}.svg`,
-            width: snap.cropRect.cropWidth,
-            height: snap.cropRect.cropHeight,
-            createdAt: new Date().toISOString(),
-            pins
-          };
-
-          await db.assets.put(newAsset);
-          newAssets.push(newAsset);
-        }
-      }
-
-      // 4. Client Summary Stats Calculation
-      let highConf = 0;
-      let needConf = 0;
-      let insuff = 0;
-      let potentialIssues = 0;
-
-      Object.values(validatedScores).forEach(item => {
-        if (item.confidence === 'high') highConf++;
-        else if (item.confidence === 'insufficient_evidence') insuff++;
-        else needConf++;
-
-        if (item.score === 0 || item.score === 1) potentialIssues++;
-      });
-
-      const fallbackResult = runPreAuditAnalysis(audit, framework, diagnoses, newAssets.length > 0 ? newAssets : assets);
-
-      return {
-        updatedScores: validatedScores,
-        consolidatedFindings: fallbackResult.consolidatedFindings,
-        primaryPatternInsight: analyzeData.primaryPattern || fallbackResult.primaryPatternInsight,
-        summaryStats: {
-          totalChecks: framework.checks.length,
-          highConfidenceCount: highConf,
-          needsConfirmationCount: needConf,
-          insufficientEvidenceCount: insuff,
-          potentialIssuesCount: potentialIssues,
-          suggestedFindingsCount: fallbackResult.consolidatedFindings.length
-        },
-        evidenceMap,
-        newAssets
-      };
-
-    } catch (err: any) {
-      console.error('Crawl & Analysis Pipeline Error:', err);
-      throw new AnalysisFailedError(err.message || 'Automated website analysis failed');
+    } catch (networkErr: any) {
+      throw new CrawlFailedError(
+        `Unable to reach crawler endpoint: ${networkErr.message}`,
+        'UNREACHABLE',
+        503,
+        'Ensure the local development server is running, or switch to Manual Audit Mode.'
+      );
     }
-  }
 
-  async analyzeWebsite(
-    audit: Audit,
-    framework: MasterFramework,
-    diagnoses: Diagnosis[],
-    assets: AuditAsset[]
-  ): Promise<AnalysisEngineResult> {
-    return this.crawlAndAnalyzeWebsite(audit, framework, diagnoses, assets);
+    if (!crawlRes.ok) {
+      const errData = await crawlRes.json().catch(() => ({}));
+      throw new CrawlFailedError(
+        errData.message || `Crawl failed with status ${crawlRes.status}`,
+        errData.errorType || 'CRAWL_FAILED',
+        crawlRes.status,
+        errData.recovery || 'Switch to Manual Audit Mode to upload screenshots directly.'
+      );
+    }
+
+    const crawlData = await crawlRes.json();
+    const evidenceMap: WebsiteEvidenceMap = crawlData.evidenceMap;
+
+    if (onProgress) onProgress('Evaluating conversion framework against extracted evidence...');
+
+    // 2. Multimodal / Heuristics Analysis
+    const analyzeRes = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName: audit.businessName,
+        websiteUrl: audit.websiteUrl,
+        industry: audit.industry,
+        cityServiceArea: audit.cityServiceArea,
+        primaryCustomerType: audit.primaryCustomerType,
+        desiredAction: audit.desiredAction,
+        auditorNotes: audit.auditorNotes,
+        brandVoiceSample: audit.brandVoiceSample,
+        frameworkChecks: framework.checks,
+        evidenceMap
+      })
+    });
+
+    if (!analyzeRes.ok) {
+      const errData = await analyzeRes.json().catch(() => ({}));
+      throw new AnalysisFailedError(errData.message || errData.error || `Server analysis returned status ${analyzeRes.status}`);
+    }
+
+    const analyzeData = await analyzeRes.json();
+    if (!analyzeData.success || !analyzeData.scores) {
+      throw new AnalysisFailedError(analyzeData.error || 'Invalid analysis response payload');
+    }
+
+    const validatedScores = validateServerAnalysisResponse(analyzeData.scores, framework);
+
+    // 3. Save Snapshots & Translate Pins
+    const newAssets: AuditAsset[] = [];
+    if (evidenceMap && evidenceMap.snapshots) {
+      const pinsBySnapshot = this.translateEvidenceToPins(evidenceMap.elements, evidenceMap.snapshots);
+
+      for (const snap of evidenceMap.snapshots) {
+        const pins = pinsBySnapshot[snap.id] || [];
+        
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+          <rect width="1440" height="900" fill="#0f172a"/>
+          <text x="50%" y="45%" fill="#cbd5e1" font-size="28" font-family="sans-serif" text-anchor="middle" font-weight="bold">
+            ${snap.sectionType.replace('_', ' ').toUpperCase()} VIEWPORT SNAPSHOT
+          </text>
+          <text x="50%" y="52%" fill="#64748b" font-size="18" font-family="sans-serif" text-anchor="middle">
+            ${evidenceMap.targetUrl} • Crawled at ${new Date(evidenceMap.crawledAt).toLocaleTimeString()}
+          </text>
+        </svg>`;
+
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const newAsset: AuditAsset = {
+          id: `asset_${snap.id}_${Date.now()}`,
+          auditId: audit.id,
+          type: 'source_of_truth',
+          subType: snap.sectionType === 'mobile_hero' ? 'mobile_hero' : 'desktop_hero',
+          title: `${snap.sectionType.replace('_', ' ').toUpperCase()}`,
+          caption: `Automated visual evidence crop from ${snap.pageUrl}`,
+          notes: `Crop rect: [${snap.cropRect.cropX}, ${snap.cropRect.cropY}, ${snap.cropRect.cropWidth}x${snap.cropRect.cropHeight}]`,
+          blob,
+          mimeType: 'image/svg+xml',
+          filename: `${snap.sectionType}.svg`,
+          width: snap.cropRect.cropWidth,
+          height: snap.cropRect.cropHeight,
+          createdAt: new Date().toISOString(),
+          pins
+        };
+
+        await db.assets.put(newAsset);
+        newAssets.push(newAsset);
+      }
+    }
+
+    // 4. Generate 6-Field Consolidated Findings
+    const consolidatedFindings = generateConsolidatedFindings(validatedScores, framework, diagnoses);
+
+    // Compute Stats
+    let highConf = 0;
+    let needConf = 0;
+    let insuff = 0;
+    let potentialIssues = 0;
+
+    framework.checks.forEach(chk => {
+      const s = validatedScores[chk.id];
+      if (!s) return;
+      if (s.confidence === 'high') highConf++;
+      else if (s.confidence === 'insufficient_evidence') insuff++;
+      else needConf++;
+
+      if (s.score === 0 || s.score === 1) potentialIssues++;
+    });
+
+    return {
+      updatedScores: validatedScores,
+      consolidatedFindings,
+      evidenceMap,
+      newAssets,
+      summaryStats: {
+        totalChecks: framework.checks.length,
+        highConfidenceCount: highConf,
+        needsConfirmationCount: needConf,
+        insufficientEvidenceCount: insuff,
+        potentialIssuesCount: potentialIssues,
+        suggestedFindingsCount: consolidatedFindings.length,
+        provisionalAudit: insuff > 0
+      }
+    };
   }
+}
+
+function validateServerAnalysisResponse(
+  scores: Record<string, any>,
+  framework: MasterFramework
+): Record<string, AuditScoreItem> {
+  const cleanScores: Record<string, AuditScoreItem> = {};
+
+  framework.checks.forEach(chk => {
+    const raw = scores[chk.id];
+    if (!raw) return;
+
+    let score = raw.score ?? raw.proposedScore ?? null;
+    if (score !== 0 && score !== 1 && score !== 2 && score !== null) {
+      score = null;
+    }
+
+    cleanScores[chk.id] = {
+      score,
+      proposedScore: score,
+      confidence: raw.confidence || (score === null ? 'insufficient_evidence' : 'high'),
+      validationStatus: raw.validationStatus || (score === null ? 'needs_review' : 'generated'),
+      evidenceType: raw.evidenceType || 'structural',
+      evidenceSource: raw.evidenceSource || 'DOM Inspection',
+      evidenceRefs: raw.evidenceRefs || [],
+      rationale: raw.rationale || '',
+      evidence: raw.evidence || '',
+      businessImpact: raw.businessImpact || '',
+      effort: raw.effort || (score === 0 ? 'High' : score === 1 ? 'Medium' : 'Low'),
+      recommendedAction: raw.recommendedAction || '',
+      tags: raw.tags || [],
+      triggeredDiagnosisIds: raw.triggeredDiagnosisIds || [],
+      suggestedFinding: raw.suggestedFinding,
+      suggestedPriority: raw.suggestedPriority || (score === 0 ? 'Critical' : score === 1 ? 'High Impact' : 'Improvement')
+    };
+  });
+
+  return cleanScores;
 }
 
 export const analysisApiClient = new AnalysisApiClient();

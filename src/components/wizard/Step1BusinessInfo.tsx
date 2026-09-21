@@ -5,6 +5,7 @@ import { Globe, Building, MapPin, UserCheck, Target, FileText, Mic, Sparkles } f
 interface Step1Props {
   audit: Audit;
   onChange: (updated: Partial<Audit>) => void;
+  onGoToManualMode?: () => void;
 }
 
 const DESIRED_ACTIONS = [
@@ -18,14 +19,26 @@ const DESIRED_ACTIONS = [
   'Other'
 ];
 
-export const Step1BusinessInfo: React.FC<Step1Props> = ({ audit, onChange }) => {
+export const Step1BusinessInfo: React.FC<Step1Props> = ({ audit, onChange, onGoToManualMode }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <h3 className="section-title">Step 1: Business & Website Information</h3>
-        <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-          Capture the core operational context of the business before beginning the 30-check evaluation.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h3 className="section-title">Step 1: Business & Website Information</h3>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+            Capture the core operational context of the business before beginning the 30-check evaluation.
+          </p>
+        </div>
+        {onGoToManualMode && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onGoToManualMode}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            Switch to Manual Audit Mode (Screenshots) →
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
