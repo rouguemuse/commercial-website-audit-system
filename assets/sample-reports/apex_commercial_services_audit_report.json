@@ -1,0 +1,126 @@
+{
+  "auditMetadata": {
+    "id": "demo_audit_apex_commercial",
+    "businessName": "Apex Commercial Services [DEMO AUDIT]",
+    "websiteUrl": "https://apexcommercial.example.com",
+    "industry": "Commercial Facility Maintenance & HVAC",
+    "serviceArea": "Metro Area & Regional Business Parks",
+    "overallScore": 52,
+    "maxScore": 60,
+    "rescueLevel": "Healthy",
+    "date": "2026-09-22T00:57:16.537Z"
+  },
+  "agency": {
+    "name": "Apex Growth Advisory",
+    "tagline": "Conversion & UX Diagnostic System",
+    "email": "hello@apexgrowth.test",
+    "phone": "(555) 234-5678",
+    "website": "https://apexgrowth.test"
+  },
+  "executiveSummary": "Apex Commercial Services provides superior facility and MEP capabilities, but the website underperforms by hiding essential conversion drivers. By clarifying the hero headline, consolidating competing buttons into a single primary call-to-action, showcasing verified safety credentials above the fold, and adding 1-tap mobile dialing, Apex Commercial can remove critical buyer friction and convert qualified commercial prospects that currently leave for clearer competitors.",
+  "categoryScores": [
+    {
+      "categoryNumber": 1,
+      "categoryName": "First Impression & Clarity",
+      "earned": 8,
+      "totalPossible": 10,
+      "percentage": 80,
+      "status": "NEEDS ATTENTION"
+    },
+    {
+      "categoryNumber": 2,
+      "categoryName": "Offer & Messaging",
+      "earned": 9,
+      "totalPossible": 10,
+      "percentage": 90,
+      "status": "WORKING"
+    },
+    {
+      "categoryNumber": 3,
+      "categoryName": "Conversion & CTA",
+      "earned": 8,
+      "totalPossible": 10,
+      "percentage": 80,
+      "status": "NEEDS ATTENTION"
+    },
+    {
+      "categoryNumber": 4,
+      "categoryName": "Trust & Credibility",
+      "earned": 9,
+      "totalPossible": 10,
+      "percentage": 90,
+      "status": "WORKING"
+    },
+    {
+      "categoryNumber": 5,
+      "categoryName": "Mobile & User Experience",
+      "earned": 8,
+      "totalPossible": 10,
+      "percentage": 80,
+      "status": "NEEDS ATTENTION"
+    },
+    {
+      "categoryNumber": 6,
+      "categoryName": "Discoverability & Local SEO",
+      "earned": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "status": "WORKING"
+    }
+  ],
+  "prioritizedFindings": [
+    {
+      "id": "demo_finding_1",
+      "finding": "Primary call-to-action and core offer headline are unclear above the fold",
+      "priority": "Critical",
+      "effort": "Low",
+      "evidence": "Hero headline \"Innovative Solutions Built for Modern Enterprise\" uses abstract slogans without declaring the facility maintenance trade or commercial focus.",
+      "businessImpact": "Visitors may leave without inquiring because they cannot determine what the company provides within the first 5 seconds.",
+      "recommendedAction": "Rewrite hero to: \"Commercial Facility Maintenance & HVAC with Guaranteed 2-Hour Regional Dispatch.\""
+    },
+    {
+      "id": "demo_finding_2",
+      "finding": "Three competing action buttons appear in the header and hero with equal visual weight",
+      "priority": "High Impact",
+      "effort": "Low",
+      "evidence": "Buttons for \"Explore Services\", \"Download Corporate Brochure\", and \"Contact Us\" fight for attention above the fold.",
+      "businessImpact": "Corporate facility managers seeking urgent dispatch experience decision friction and bounce.",
+      "recommendedAction": "Consolidate competing options into one high-contrast primary \"Request Immediate Service\" button and move the brochure to the footer."
+    },
+    {
+      "id": "demo_finding_3",
+      "finding": "Verified facility customer reviews and safety credentials are buried below the fold",
+      "priority": "High Impact",
+      "effort": "Medium",
+      "evidence": "Zero ratings, commercial client logos, or trade certifications (OSHA, EPA, NATE) are visible in the initial 800px viewport.",
+      "businessImpact": "First-time commercial buyers cannot verify company scale or reliability, increasing perceived operational risk.",
+      "recommendedAction": "Add a prominent trust bar showing \"4.9★ from 350+ Facilities • OSHA & NATE Certified\" directly under the primary CTA."
+    },
+    {
+      "id": "demo_finding_4",
+      "finding": "Mobile phone numbers are rendered as unclickable plain text on smartphone viewports",
+      "priority": "Critical",
+      "effort": "Low",
+      "evidence": "Header phone \"(555) 234-5678\" cannot be tapped directly on iOS/Android; lacks active tel: hyperlink.",
+      "businessImpact": "On-site managers on mobile devices looking for emergency repair must manually copy/dial, risking lost inquiries.",
+      "recommendedAction": "Convert all phone instances to tap-to-call links and add a sticky mobile bottom action bar."
+    },
+    {
+      "id": "demo_finding_5",
+      "finding": "Transparent service rate guidance and emergency intake SLA steps are missing",
+      "priority": "Improvement",
+      "effort": "Medium",
+      "evidence": "No baseline hourly rates or structured 3-step \"Dispatch Timeline\" provided on service pages.",
+      "businessImpact": "Inquirers uncertain about dispatch turnaround or unexpected overage costs often hesitate to call.",
+      "recommendedAction": "Add a 3-step dispatch process: 1. Work Order Intake → 2. Tech En Route (<2hr) → 3. Status Tracking."
+    }
+  ],
+  "recommendedOffer": {
+    "offerName": "48-Hour Conversion Rescue",
+    "price": "$350",
+    "turnaround": "48 Hours",
+    "description": "Complete implementation of the high-converting hero headline, single primary intake CTA, mobile click-to-call bar, and above-the-fold social proof trust strip.",
+    "customScope": "Includes trade messaging rewrite, mobile tap-to-call optimization, trust bar styling, and 3-field quote intake form.",
+    "ctaText": "Schedule 48-Hour Conversion Rescue"
+  }
+}

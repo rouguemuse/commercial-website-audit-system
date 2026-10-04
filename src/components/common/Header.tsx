@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { brandingConfig } from '../../config/brandingConfig';
-import { PlusCircle, Sun, Moon, Menu } from 'lucide-react';
+import { PlusCircle, Sun, Moon, Menu, Lock } from 'lucide-react';
 
 interface HeaderProps {
   onStartAudit: () => void;
@@ -8,6 +8,8 @@ interface HeaderProps {
   onOpenBranding?: () => void;
   onLoadDemoAudit?: () => void;
   onToggleMobileNav?: () => void;
+  onOpenAuthUnlock?: () => void;
+  authStatus?: { authRequired: boolean; authenticated: boolean };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,7 +17,9 @@ export const Header: React.FC<HeaderProps> = ({
   frameworkVersion,
   onOpenBranding,
   onLoadDemoAudit,
-  onToggleMobileNav
+  onToggleMobileNav,
+  onOpenAuthUnlock,
+  authStatus
 }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('agency_theme_mode') as 'light' | 'dark') || 'light';
@@ -43,19 +47,19 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu size={18} />
           </button>
         )}
-        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+        <span className="hide-mobile" style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
           {brandingConfig.appName}
         </span>
-        <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
+        <span className="badge badge-neutral hide-mobile" style={{ fontSize: '0.72rem' }}>
           Framework v{frameworkVersion}
         </span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {onLoadDemoAudit && (
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm hide-mobile"
             onClick={onLoadDemoAudit}
             title="Load ready-made fictional demo audit"
             style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', borderColor: 'var(--accent-border)', color: 'var(--accent-text)' }}
@@ -67,12 +71,25 @@ export const Header: React.FC<HeaderProps> = ({
         {onOpenBranding && (
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm hide-mobile"
             onClick={onOpenBranding}
             title="Configure white-label agency name, logo, colors and contact"
             style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <span>🎨 Agency Branding</span>
+          </button>
+        )}
+
+        {authStatus?.authRequired && !authStatus?.authenticated && onOpenAuthUnlock && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm badge-rose"
+            onClick={onOpenAuthUnlock}
+            title="Unlock production access with server passphrase"
+            style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Lock size={14} />
+            <span>Unlock</span>
           </button>
         )}
 

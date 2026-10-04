@@ -12,8 +12,10 @@ import { Sidebar, type NavTab } from './components/common/Sidebar';
 import { Header } from './components/common/Header';
 import { BackupModal } from './components/common/BackupModal';
 import { AgencyBrandingModal } from './components/common/AgencyBrandingModal';
+import { AuthUnlockModal } from './components/common/AuthUnlockModal';
 import { createFictionalDemoAudit } from './data/demoAudit';
 import { brandingConfig } from './config/brandingConfig';
+import { checkAuthStatus } from './services/analysisApiClient';
 
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FrameworkView } from './components/framework/FrameworkView';
@@ -46,6 +48,8 @@ export const App: React.FC = () => {
   const [isBrandingOpen, setIsBrandingOpen] = useState(false);
   const [, setBrandingVersion] = useState(0);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [authStatus, setAuthStatus] = useState<{ authRequired: boolean; authenticated: boolean }>({ authRequired: false, authenticated: true });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const handleLoadDemoAudit = async () => {
     if (!framework) return;
@@ -78,6 +82,15 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [includeDemo]);
+
+  useEffect(() => {
+    checkAuthStatus().then(status => {
+      setAuthStatus(status);
+      if (status.authRequired && !status.authenticated) {
+        setIsAuthModalOpen(true);
+      }
+    });
+  }, []);
 
   // Load assets when activeAuditId changes
   useEffect(() => {
@@ -463,6 +476,8 @@ export const App: React.FC = () => {
           onOpenBranding={() => setIsBrandingOpen(true)}
           onLoadDemoAudit={handleLoadDemoAudit}
           onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
+          onOpenAuthUnlock={() => setIsAuthModalOpen(true)}
+          authStatus={authStatus}
         />
 
         {currentTab === 'dashboard' && (
@@ -564,6 +579,15 @@ export const App: React.FC = () => {
         isOpen={isBrandingOpen}
         onClose={() => setIsBrandingOpen(false)}
         onBrandingUpdated={() => setBrandingVersion(v => v + 1)}
+      />
+
+      <AuthUnlockModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthenticated={() => {
+          setAuthStatus({ authRequired: true, authenticated: true });
+          loadData();
+        }}
       />
     </div>
   );

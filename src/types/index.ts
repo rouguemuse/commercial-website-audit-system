@@ -119,7 +119,7 @@ export interface SectionSnapshotData {
   pageUrl: string;
   viewport: 'desktop' | 'mobile';
   cropRect: SectionCropRect;
-  mimeType: 'image/webp' | 'image/jpeg' | 'image/png';
+  mimeType: 'image/webp' | 'image/jpeg' | 'image/png' | 'image/svg+xml';
   base64Data?: string; // Transferred during API response, converted to Blob on client
   byteSize?: number;
 }
@@ -328,10 +328,10 @@ export interface ValueLadderOffer {
   isPublicFunnel: boolean;
 }
 
-export * from './sellerProfile';
-export * from './company';
-export * from './opportunity';
-export * from './sellerFit';
-export * from './qualification';
-export * from './actionRecommendation';
+export * from './sellerProfile.js';
+export * from './company.js';
+export * from './opportunity.js';
+export * from './sellerFit.js';
+export * from './qualification.js';
+export * from './actionRecommendation.js';
 

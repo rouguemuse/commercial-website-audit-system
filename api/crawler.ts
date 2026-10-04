@@ -1,9 +1,15 @@
 import dns from 'dns';
 import net from 'net';
 import { promisify } from 'util';
-import type { WebsiteEvidenceMap, EvidenceElement, SectionSnapshotData, CrawlPageResult, CrawlPageType } from '../src/types';
+import type { WebsiteEvidenceMap, EvidenceElement, SectionSnapshotData, CrawlPageResult, CrawlPageType } from '../src/types/index.js';
+import { checkApiAuth } from './auth.js';
 
 const dnsLookupAll = promisify(dns.lookup);
+
+export interface CrawlerTestHooks {
+  dnsResolver?: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
+  fetchTransport?: (url: string, init?: any) => Promise<Response>;
+}
 
 export interface ApiRequest {
   method?: string;
@@ -21,7 +27,7 @@ export interface ApiResponse {
 // SSRF Comprehensive IP Range Checker
 export function isPrivateOrReservedIp(ip: string): boolean {
   if (!ip) return true;
-  const cleanIp = ip.trim().toLowerCase();
+  const cleanIp = ip.trim().toLowerCase().replace(/^\[|\]$/g, '');
 
   // If not a valid IP literal, don't flag as private IP here
   if (net.isIP(cleanIp) === 0 && !cleanIp.startsWith('::ffff:')) {
@@ -110,8 +116,11 @@ export function isPrivateOrReservedIp(ip: string): boolean {
   return false;
 }
 
-// SSRF Safe URL Validator
-export async function validateUrlSecurity(urlString: string): Promise<{
+// SSRF Safe URL Validator with DNS resolution & rebinding defense
+export async function validateUrlSecurity(
+  urlString: string,
+  customResolver?: (hostname: string) => Promise<Array<{ address: string; family: number }>>
+): Promise<{
   valid: boolean;
   errorType?: 'INVALID_URL' | 'DNS_UNRESOLVED' | 'SSRF_BLOCKED';
   statusCode?: number;
@@ -163,10 +172,14 @@ export async function validateUrlSecurity(urlString: string): Promise<{
     }
 
     // Resolve all IPv4 and IPv6 addresses for hostname
-    let records: dns.LookupAddress[] = [];
+    let records: Array<{ address: string; family: number }> = [];
     try {
-      const res = await dnsLookupAll(hostname, { all: true });
-      records = Array.isArray(res) ? res : [res];
+      if (customResolver) {
+        records = await customResolver(hostname);
+      } else {
+        const res = await dnsLookupAll(hostname, { all: true });
+        records = Array.isArray(res) ? res : [res];
+      }
     } catch (dnsErr: any) {
       return {
         valid: false,
@@ -212,54 +225,29 @@ export async function validateUrlSecurity(urlString: string): Promise<{
   }
 }
 
-// Authentication Check with fail-closed production requirement
+// Authentication Check delegating to hardened stateless session & key verifier
 export function checkAuth(req: ApiRequest): { authorized: boolean; reason?: string; statusCode?: number } {
-  const secret = process.env.AUDIT_SECRET;
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  if (!secret) {
-    if (isProduction) {
-      return {
-        authorized: false,
-        statusCode: 503,
-        reason: 'Service Unavailable: AUDIT_SECRET environment variable is not configured on this production server.'
-      };
-    }
-    return { authorized: true };
-  }
-
-  const headerKey = (req.headers['x-audit-key'] || req.headers['X-Audit-Key']) as string;
-  const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string;
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-  if (headerKey === secret || bearerToken === secret) {
-    return { authorized: true };
-  }
-
-  return {
-    authorized: false,
-    statusCode: 401,
-    reason: 'Unauthorized: Invalid or missing audit credentials.'
-  };
+  return checkApiAuth(req);
 }
 
 function cleanHtmlText(snippet: string): string {
   return snippet.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// Manual-redirect fetching with SSRF revalidation and size limit
-async function fetchSafeHtml(
+// Manual-redirect fetching with SSRF revalidation, rebinding defense, and size limit
+export async function fetchSafeHtml(
   initialUrl: string,
   userAgent: string,
   timeoutMs: number = 10000,
-  maxRedirects: number = 3
+  maxRedirects: number = 3,
+  hooks?: CrawlerTestHooks
 ): Promise<{ response: Response; finalUrl: string; html: string; durationMs: number }> {
   let currentUrl = initialUrl;
   const startTime = Date.now();
   const MAX_SIZE = 2 * 1024 * 1024; // 2MB limit
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount++) {
-    const sec = await validateUrlSecurity(currentUrl);
+    const sec = await validateUrlSecurity(currentUrl, hooks?.dnsResolver);
     if (!sec.valid) {
       const err: any = new Error(sec.message || 'Security validation failed');
       err.errorType = sec.errorType || 'SSRF_BLOCKED';
@@ -273,15 +261,21 @@ async function fetchSafeHtml(
 
     let res: Response;
     try {
-      res = await fetch(currentUrl, {
+      const fetchOpts = {
         headers: {
           'User-Agent': userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9'
         },
         signal: controller.signal,
-        redirect: 'manual'
-      });
+        redirect: 'manual' as const
+      };
+
+      if (hooks?.fetchTransport) {
+        res = await hooks.fetchTransport(currentUrl, fetchOpts);
+      } else {
+        res = await fetch(currentUrl, fetchOpts);
+      }
     } catch (fetchErr: any) {
       clearTimeout(timer);
       if (fetchErr.name === 'AbortError') {
@@ -320,10 +314,47 @@ async function fetchSafeHtml(
       throw err;
     }
 
-    const text = await res.text();
-    const truncatedText = text.length > MAX_SIZE ? text.slice(0, MAX_SIZE) : text;
-    const durationMs = Date.now() - startTime;
+    // Stream-safe read up to 2MB to prevent buffering large payloads in memory
+    let truncatedText = '';
+    if (res.body && typeof (res.body as any).getReader === 'function') {
+      const reader = (res.body as any).getReader();
+      const decoder = new TextDecoder();
+      let totalBytes = 0;
+      let exceeded = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.length;
+          if (totalBytes > MAX_SIZE) {
+            exceeded = true;
+            try { await reader.cancel(); } catch {}
+            break;
+          }
+          truncatedText += decoder.decode(value, { stream: true });
+        }
+      }
+      truncatedText += decoder.decode();
+      if (exceeded) {
+        const err: any = new Error(`Target website response size exceeds the 2MB limit.`);
+        err.errorType = 'RESPONSE_TOO_LARGE';
+        err.statusCode = 413;
+        err.recovery = 'The target page is larger than 2MB. Use Manual Audit Mode to capture specific sections.';
+        throw err;
+      }
+    } else {
+      const text = await res.text();
+      if (text.length > MAX_SIZE) {
+        const err: any = new Error(`Target website response size exceeds the 2MB limit.`);
+        err.errorType = 'RESPONSE_TOO_LARGE';
+        err.statusCode = 413;
+        err.recovery = 'The target page is larger than 2MB. Use Manual Audit Mode to capture specific sections.';
+        throw err;
+      }
+      truncatedText = text;
+    }
 
+    const durationMs = Date.now() - startTime;
     return { response: res, finalUrl: currentUrl, html: truncatedText, durationMs };
   }
 
@@ -332,6 +363,291 @@ async function fetchSafeHtml(
   err.statusCode = 310;
   err.recovery = 'Target website is stuck in a redirect loop. Verify URL or switch to Manual Audit Mode.';
   throw err;
+}
+
+export async function crawlTargetWebsite(
+  rawTargetUrl: string,
+  hooks?: CrawlerTestHooks
+): Promise<WebsiteEvidenceMap> {
+  let targetUrl = rawTargetUrl.trim();
+  if (!/^https?:\/\//i.test(targetUrl)) {
+    targetUrl = 'https://' + targetUrl;
+  }
+
+  // 1. Initial SSRF & DNS Security Validation
+  const securityCheck = await validateUrlSecurity(targetUrl, hooks?.dnsResolver);
+  if (!securityCheck.valid || !securityCheck.urlObj) {
+    const err: any = new Error(securityCheck.message || 'URL validation failed');
+    err.errorType = securityCheck.errorType || 'INVALID_URL';
+    err.statusCode = securityCheck.statusCode || 400;
+    err.recovery = securityCheck.recovery || 'Check the website URL and try again.';
+    throw err;
+  }
+
+  const targetOrigin = securityCheck.urlObj.origin;
+  const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 (WebsiteAuditBot/2.0)';
+
+  // 2. Fetch Homepage with Manual Redirect Revalidation & SSRF Protection
+  const homeFetchResult = await fetchSafeHtml(targetUrl, USER_AGENT, 10000, 3, hooks);
+  const { response: homeRes, html: homeHtml, durationMs: homeLoadDuration, finalUrl } = homeFetchResult;
+
+  // Check HTTP Status of Homepage
+  if (homeRes.status === 403) {
+    const err: any = new Error('Website returned HTTP 403 (Automated scanner blocked by Cloudflare, WAF, or server permissions).');
+    err.errorType = 'BOT_BLOCKED';
+    err.statusCode = 403;
+    err.recovery = 'This website actively blocks automated bots. Use Manual Audit Mode to upload screenshots and audit directly.';
+    throw err;
+  }
+
+  if (homeRes.status === 429) {
+    const err: any = new Error('Website returned HTTP 429 (Too Many Requests / Rate Limited).');
+    err.errorType = 'RATE_LIMITED';
+    err.statusCode = 429;
+    err.recovery = 'The website is temporarily throttling requests. Please wait a minute or use Manual Audit Mode.';
+    throw err;
+  }
+
+  // Check for Cloudflare / CAPTCHA Challenge Page
+  if (/challenge-platform|just a moment\.\.\.|attention required! \| cloudflare|cf-browser-verification/i.test(homeHtml) && homeHtml.length < 5000) {
+    const err: any = new Error('Cloudflare interactive challenge detected. The website requires a human browser verification.');
+    err.errorType = 'BOT_BLOCKED';
+    err.statusCode = 403;
+    err.recovery = 'Automated crawlers cannot bypass Cloudflare turnstile. Switch to Manual Audit Mode to capture screenshots.';
+    throw err;
+  }
+
+  const crawlResults: CrawlPageResult[] = [
+    {
+      url: finalUrl,
+      pageType: 'home',
+      status: homeRes.ok ? 'captured' : 'partial',
+      httpStatus: homeRes.status,
+      durationMs: homeLoadDuration
+    }
+  ];
+
+  const elements: EvidenceElement[] = [];
+  const detectedPhoneNumbers: string[] = [];
+  let hasTelLinks = false;
+  let formCount = 0;
+
+  // Parse Meta and Structural Elements on Homepage
+  const titleMatch = homeHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const pageTitle = titleMatch ? cleanHtmlText(titleMatch[1]) : '';
+
+  const descMatch = homeHtml.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  const pageDescription = descMatch ? cleanHtmlText(descMatch[1]) : '';
+
+  // Extract Homepage H1s
+  const h1Regex = /<h1[^>]*>([\s\S]*?)<\/h1>/gi;
+  let h1Match;
+  let h1Index = 1;
+  while ((h1Match = h1Regex.exec(homeHtml)) !== null && h1Index <= 3) {
+    const text = cleanHtmlText(h1Match[1]);
+    if (text) {
+      elements.push({
+        id: `HOME.hero.h1_${h1Index}`,
+        pageUrl: finalUrl,
+        pageType: 'home',
+        category: 'headline',
+        tag: 'H1',
+        visibleText: text,
+        boundingBox: { pageX: 180, pageY: 160 + (h1Index - 1) * 80, width: 720, height: 75 },
+        viewport: 'desktop',
+        isVisible: true,
+        associatedSnapshotId: 'snap_desktop_hero'
+      });
+      h1Index++;
+    }
+  }
+
+  // Extract Homepage CTAs
+  const btnRegex = /<(?:button|a)[^>]*(?:class=["'][^"']*(?:btn|cta|button)[^"']*["']|href=["']([^"']*(?:contact|quote|book|schedule|tel:)[^"']*)["'])[^>]*>([\s\S]*?)<\/(?:button|a)>/gi;
+  let btnMatch;
+  let btnIndex = 1;
+  while ((btnMatch = btnRegex.exec(homeHtml)) !== null && btnIndex <= 6) {
+    const href = btnMatch[1] || '';
+    const text = cleanHtmlText(btnMatch[2]);
+    if (text && text.length < 60) {
+      elements.push({
+        id: `HOME.hero.cta_${btnIndex}`,
+        pageUrl: finalUrl,
+        pageType: 'home',
+        category: 'cta',
+        tag: 'BUTTON',
+        visibleText: text,
+        href,
+        boundingBox: { pageX: 180 + (btnIndex - 1) * 200, pageY: 340, width: 190, height: 50 },
+        viewport: 'desktop',
+        isVisible: true,
+        associatedSnapshotId: 'snap_desktop_hero'
+      });
+      btnIndex++;
+    }
+  }
+
+  // Phone / Tel links
+  const telRegex = /href=["']tel:([^"']+)["']/gi;
+  let telMatch;
+  while ((telMatch = telRegex.exec(homeHtml)) !== null) {
+    hasTelLinks = true;
+    const cleanPhone = telMatch[1].trim();
+    if (!detectedPhoneNumbers.includes(cleanPhone)) {
+      detectedPhoneNumbers.push(cleanPhone);
+    }
+  }
+
+  // Forms count
+  const formsMatch = homeHtml.match(/<form[\s\S]*?<\/form>/gi);
+  if (formsMatch) {
+    formCount = formsMatch.length;
+    elements.push({
+      id: 'HOME.form.inquiry',
+      pageUrl: finalUrl,
+      pageType: 'home',
+      category: 'form',
+      tag: 'FORM',
+      visibleText: 'Inquiry intake form',
+      boundingBox: { pageX: 840, pageY: 220, width: 420, height: 480 },
+      viewport: 'desktop',
+      isVisible: true,
+      associatedSnapshotId: 'snap_contact_form'
+    });
+  }
+
+  // 3. Discover and Crawl Subpages (Up to 4 subpages, matching origin strictly and SSRF safe)
+  const discoveredPages: Array<{ type: CrawlPageType; url: string }> = [];
+  const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let linkMatch;
+
+  while ((linkMatch = linkRegex.exec(homeHtml)) !== null) {
+    const href = linkMatch[1].trim();
+    const text = cleanHtmlText(linkMatch[2]).toLowerCase();
+
+    let matchedType: CrawlPageType | null = null;
+    if (/(?:services|what-we-do|solutions|products)/i.test(href) || /(?:services|what we do|solutions)/i.test(text)) {
+      matchedType = 'services';
+    } else if (/(?:contact|contact-us|get-in-touch|quote)/i.test(href) || /(?:contact|get a quote|estimate)/i.test(text)) {
+      matchedType = 'contact';
+    } else if (/(?:about|about-us|our-story|company)/i.test(href) || /(?:about us|who we are)/i.test(text)) {
+      matchedType = 'about';
+    } else if (/(?:pricing|rates|plans|costs)/i.test(href) || /(?:pricing|rates|plans)/i.test(text)) {
+      matchedType = 'pricing';
+    }
+
+    if (matchedType && !discoveredPages.some(p => p.type === matchedType)) {
+      try {
+        const resolvedSubUrl = new URL(href, finalUrl);
+        if (resolvedSubUrl.origin === targetOrigin && resolvedSubUrl.href !== finalUrl) {
+          // SSRF validation for discovered subpage before queueing
+          const subSec = await validateUrlSecurity(resolvedSubUrl.href, hooks?.dnsResolver);
+          if (subSec.valid) {
+            discoveredPages.push({ type: matchedType, url: resolvedSubUrl.href });
+          }
+        }
+      } catch {
+        // Ignore unparseable link
+      }
+    }
+
+    if (discoveredPages.length >= 4) break;
+  }
+
+  // Crawl discovered subpages concurrently with timeout and SSRF protection
+  await Promise.all(
+    discoveredPages.map(async (pageInfo) => {
+      try {
+        const subResult = await fetchSafeHtml(pageInfo.url, USER_AGENT, 6000, 2, hooks);
+        crawlResults.push({
+          url: subResult.finalUrl,
+          pageType: pageInfo.type,
+          status: subResult.response.ok ? 'captured' : 'partial',
+          httpStatus: subResult.response.status,
+          durationMs: subResult.durationMs
+        });
+
+        if (subResult.response.ok) {
+          const subH1 = subResult.html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+          if (subH1) {
+            const text = cleanHtmlText(subH1[1]);
+            if (text) {
+              elements.push({
+                id: `${pageInfo.type.toUpperCase()}.h1`,
+                pageUrl: subResult.finalUrl,
+                pageType: pageInfo.type,
+                category: 'headline',
+                tag: 'H1',
+                visibleText: text,
+                boundingBox: { pageX: 180, pageY: 150, width: 700, height: 60 },
+                viewport: 'desktop',
+                isVisible: true
+              });
+            }
+          }
+        }
+      } catch (subErr: any) {
+        crawlResults.push({
+          url: pageInfo.url,
+          pageType: pageInfo.type,
+          status: 'unavailable',
+          errorMessage: subErr.message,
+          durationMs: 0
+        });
+      }
+    })
+  );
+
+  // 4. Build Section Snapshots Metadata (Explicitly labeled as schematic layout wireframes)
+  const snapshots: SectionSnapshotData[] = [
+    {
+      id: 'snap_desktop_hero',
+      sectionType: 'desktop_hero',
+      pageUrl: finalUrl,
+      viewport: 'desktop',
+      cropRect: { cropX: 0, cropY: 0, cropWidth: 1440, cropHeight: 900 },
+      mimeType: 'image/svg+xml'
+    },
+    {
+      id: 'snap_mobile_hero',
+      sectionType: 'mobile_hero',
+      pageUrl: finalUrl,
+      viewport: 'mobile',
+      cropRect: { cropX: 0, cropY: 0, cropWidth: 390, cropHeight: 844 },
+      mimeType: 'image/svg+xml'
+    }
+  ];
+
+  if (formCount > 0) {
+    snapshots.push({
+      id: 'snap_contact_form',
+      sectionType: 'contact_form',
+      pageUrl: finalUrl,
+      viewport: 'desktop',
+      cropRect: { cropX: 800, cropY: 180, cropWidth: 500, cropHeight: 600 },
+      mimeType: 'image/svg+xml'
+    });
+  }
+
+  return {
+    targetUrl: finalUrl,
+    crawledAt: new Date().toISOString(),
+    pages: crawlResults,
+    elements,
+    snapshots,
+    meta: {
+      title: pageTitle,
+      description: pageDescription,
+      hasTelLinks,
+      hasForms: formCount > 0,
+      formCount,
+      hasReviewsMarkup: homeHtml.includes('aggregateRating') || homeHtml.includes('reviewRating') || homeHtml.includes('★'),
+      detectedServiceArea: undefined,
+      detectedPhoneNumbers,
+      desktopLoadTimeMs: homeLoadDuration,
+      mobileLoadTimeMs: Math.round(homeLoadDuration * 1.1)
+    }
+  };
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -346,11 +662,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       success: false,
       errorType: 'UNAUTHORIZED',
       message: auth.reason || 'Unauthorized access.',
-      recovery: 'Provide the configured AUDIT_SECRET key in the x-audit-key or Authorization header.'
+      recovery: 'Provide valid authentication credentials via session cookie or API key.'
     });
   }
 
-  let { targetUrl } = req.body || {};
+  const { targetUrl } = req.body || {};
   if (!targetUrl || typeof targetUrl !== 'string') {
     return res.status(400).json({
       success: false,
@@ -360,328 +676,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
   }
 
-  targetUrl = targetUrl.trim();
-  if (!/^https?:\/\//i.test(targetUrl)) {
-    targetUrl = 'https://' + targetUrl;
-  }
-
-  // 2. Initial SSRF & DNS Security Validation
-  const securityCheck = await validateUrlSecurity(targetUrl);
-  if (!securityCheck.valid || !securityCheck.urlObj) {
-    return res.status(securityCheck.statusCode || 400).json({
-      success: false,
-      errorType: securityCheck.errorType || 'INVALID_URL',
-      statusCode: securityCheck.statusCode || 400,
-      message: securityCheck.message || 'URL validation failed',
-      recovery: securityCheck.recovery || 'Check the website URL and try again.'
-    });
-  }
-
-  const targetOrigin = securityCheck.urlObj.origin;
-  const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 (WebsiteAuditBot/2.0)';
-
   try {
-    // 3. Fetch Homepage with Manual Redirect Revalidation & SSRF Protection
-    let homeFetchResult;
-    try {
-      homeFetchResult = await fetchSafeHtml(targetUrl, USER_AGENT, 10000, 3);
-    } catch (fetchErr: any) {
-      return res.status(fetchErr.statusCode || 502).json({
-        success: false,
-        errorType: fetchErr.errorType || 'UNREACHABLE',
-        statusCode: fetchErr.statusCode || 502,
-        message: fetchErr.message,
-        recovery: fetchErr.recovery || 'Verify the website is online or use Manual Audit Mode.'
-      });
-    }
-
-    const { response: homeRes, html: homeHtml, durationMs: homeLoadDuration, finalUrl } = homeFetchResult;
-
-    // Check HTTP Status of Homepage
-    if (homeRes.status === 403) {
-      return res.status(403).json({
-        success: false,
-        errorType: 'BOT_BLOCKED',
-        statusCode: 403,
-        message: 'Website returned HTTP 403 (Automated scanner blocked by Cloudflare, WAF, or server permissions).',
-        recovery: 'This website actively blocks automated bots. Use Manual Audit Mode to upload screenshots and audit directly.'
-      });
-    }
-
-    if (homeRes.status === 429) {
-      return res.status(429).json({
-        success: false,
-        errorType: 'RATE_LIMITED',
-        statusCode: 429,
-        message: 'Website returned HTTP 429 (Too Many Requests / Rate Limited).',
-        recovery: 'The website is temporarily throttling requests. Please wait a minute or use Manual Audit Mode.'
-      });
-    }
-
-    if (homeRes.status >= 500) {
-      return res.status(homeRes.status).json({
-        success: false,
-        errorType: 'SERVER_ERROR',
-        statusCode: homeRes.status,
-        message: `Website returned server error HTTP ${homeRes.status} (${homeRes.statusText}).`,
-        recovery: 'The target website is experiencing internal server issues. Check if the site is functioning normally.'
-      });
-    }
-
-    // Check for Cloudflare / CAPTCHA Challenge Page
-    if (/challenge-platform|just a moment\.\.\.|attention required! \| cloudflare|cf-browser-verification/i.test(homeHtml) && homeHtml.length < 5000) {
-      return res.status(403).json({
-        success: false,
-        errorType: 'BOT_BLOCKED',
-        statusCode: 403,
-        message: 'Cloudflare interactive challenge detected. The website requires a human browser verification.',
-        recovery: 'Automated crawlers cannot bypass Cloudflare turnstile. Switch to Manual Audit Mode to capture screenshots.'
-      });
-    }
-
-    const crawlResults: CrawlPageResult[] = [
-      {
-        url: finalUrl,
-        pageType: 'home',
-        status: homeRes.ok ? 'captured' : 'partial',
-        httpStatus: homeRes.status,
-        durationMs: homeLoadDuration
-      }
-    ];
-
-    const elements: EvidenceElement[] = [];
-    const detectedPhoneNumbers: string[] = [];
-    let hasTelLinks = false;
-    let formCount = 0;
-
-    // Parse Meta and Structural Elements on Homepage
-    const titleMatch = homeHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const pageTitle = titleMatch ? cleanHtmlText(titleMatch[1]) : '';
-
-    const descMatch = homeHtml.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
-    const pageDescription = descMatch ? cleanHtmlText(descMatch[1]) : '';
-
-    // Extract Homepage H1s
-    const h1Regex = /<h1[^>]*>([\s\S]*?)<\/h1>/gi;
-    let h1Match;
-    let h1Index = 1;
-    while ((h1Match = h1Regex.exec(homeHtml)) !== null && h1Index <= 3) {
-      const text = cleanHtmlText(h1Match[1]);
-      if (text) {
-        elements.push({
-          id: `HOME.hero.h1_${h1Index}`,
-          pageUrl: finalUrl,
-          pageType: 'home',
-          category: 'headline',
-          tag: 'H1',
-          visibleText: text,
-          boundingBox: { pageX: 180, pageY: 160 + (h1Index - 1) * 90, width: 720, height: 75 },
-          viewport: 'desktop',
-          isVisible: true,
-          associatedSnapshotId: 'snap_desktop_hero'
-        });
-        h1Index++;
-      }
-    }
-
-    // Extract Homepage CTAs
-    const btnRegex = /<(?:button|a)[^>]*(?:class=["'][^"']*(?:btn|cta|button)[^"']*["']|href=["']([^"']*(?:contact|quote|book|schedule|tel:)[^"']*)["'])[^>]*>([\s\S]*?)<\/(?:button|a)>/gi;
-    let btnMatch;
-    let btnIndex = 1;
-    while ((btnMatch = btnRegex.exec(homeHtml)) !== null && btnIndex <= 6) {
-      const href = btnMatch[1] || '';
-      const text = cleanHtmlText(btnMatch[2]);
-      if (text && text.length < 60) {
-        elements.push({
-          id: `HOME.hero.cta_${btnIndex}`,
-          pageUrl: finalUrl,
-          pageType: 'home',
-          category: 'cta',
-          tag: 'BUTTON',
-          visibleText: text,
-          href,
-          boundingBox: { pageX: 180 + (btnIndex - 1) * 200, pageY: 340, width: 190, height: 50 },
-          viewport: 'desktop',
-          isVisible: true,
-          associatedSnapshotId: 'snap_desktop_hero'
-        });
-        btnIndex++;
-      }
-    }
-
-    // Phone / Tel links
-    const telRegex = /href=["']tel:([^"']+)["']/gi;
-    let telMatch;
-    while ((telMatch = telRegex.exec(homeHtml)) !== null) {
-      hasTelLinks = true;
-      const cleanPhone = telMatch[1].trim();
-      if (!detectedPhoneNumbers.includes(cleanPhone)) {
-        detectedPhoneNumbers.push(cleanPhone);
-      }
-    }
-
-    // Forms count
-    const formsMatch = homeHtml.match(/<form[\s\S]*?<\/form>/gi);
-    if (formsMatch) {
-      formCount = formsMatch.length;
-      elements.push({
-        id: 'HOME.form.inquiry',
-        pageUrl: finalUrl,
-        pageType: 'home',
-        category: 'form',
-        tag: 'FORM',
-        visibleText: 'Inquiry intake form',
-        boundingBox: { pageX: 840, pageY: 220, width: 420, height: 480 },
-        viewport: 'desktop',
-        isVisible: true,
-        associatedSnapshotId: 'snap_contact_form'
-      });
-    }
-
-    // 4. Discover and Crawl Subpages (Up to 4 subpages, matching origin strictly)
-    const discoveredPages: Array<{ type: CrawlPageType; url: string }> = [];
-    const linkRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    let linkMatch;
-
-    while ((linkMatch = linkRegex.exec(homeHtml)) !== null) {
-      const href = linkMatch[1].trim();
-      const text = cleanHtmlText(linkMatch[2]).toLowerCase();
-
-      let matchedType: CrawlPageType | null = null;
-      if (/(?:services|what-we-do|solutions|products)/i.test(href) || /(?:services|what we do|solutions)/i.test(text)) {
-        matchedType = 'services';
-      } else if (/(?:contact|contact-us|get-in-touch|quote)/i.test(href) || /(?:contact|get a quote|estimate)/i.test(text)) {
-        matchedType = 'contact';
-      } else if (/(?:about|about-us|our-story|company)/i.test(href) || /(?:about us|who we are)/i.test(text)) {
-        matchedType = 'about';
-      } else if (/(?:pricing|rates|plans|costs)/i.test(href) || /(?:pricing|rates|plans)/i.test(text)) {
-        matchedType = 'pricing';
-      }
-
-      if (matchedType && !discoveredPages.some(p => p.type === matchedType)) {
-        try {
-          const resolvedSubUrl = new URL(href, finalUrl);
-          if (resolvedSubUrl.origin === targetOrigin && resolvedSubUrl.href !== finalUrl) {
-            discoveredPages.push({ type: matchedType, url: resolvedSubUrl.href });
-          }
-        } catch {
-          // Ignore unparseable link
-        }
-      }
-
-      if (discoveredPages.length >= 4) break;
-    }
-
-    // Crawl discovered subpages concurrently with timeout and SSRF protection
-    await Promise.all(
-      discoveredPages.map(async (pageInfo) => {
-        try {
-          const subResult = await fetchSafeHtml(pageInfo.url, USER_AGENT, 6000, 2);
-          crawlResults.push({
-            url: subResult.finalUrl,
-            pageType: pageInfo.type,
-            status: subResult.response.ok ? 'captured' : 'partial',
-            httpStatus: subResult.response.status,
-            durationMs: subResult.durationMs
-          });
-
-          if (subResult.response.ok) {
-            const subH1 = subResult.html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-            if (subH1) {
-              const text = cleanHtmlText(subH1[1]);
-              if (text) {
-                elements.push({
-                  id: `${pageInfo.type.toUpperCase()}.h1`,
-                  pageUrl: subResult.finalUrl,
-                  pageType: pageInfo.type,
-                  category: 'headline',
-                  tag: 'H1',
-                  visibleText: text,
-                  boundingBox: { pageX: 180, pageY: 150, width: 700, height: 60 },
-                  viewport: 'desktop',
-                  isVisible: true
-                });
-              }
-            }
-          }
-        } catch (subErr: any) {
-          crawlResults.push({
-            url: pageInfo.url,
-            pageType: pageInfo.type,
-            status: 'unavailable',
-            errorMessage: subErr.message,
-            durationMs: 0
-          });
-        }
-      })
-    );
-
-    // 5. Build Section Snapshots Metadata (Explicitly labeled as schematic layout wireframes)
-    const snapshots: SectionSnapshotData[] = [
-      {
-        id: 'snap_desktop_hero',
-        sectionType: 'desktop_hero',
-        pageUrl: finalUrl,
-        viewport: 'desktop',
-        cropRect: { cropX: 0, cropY: 0, cropWidth: 1440, cropHeight: 900 },
-        mimeType: 'image/svg+xml'
-      },
-      {
-        id: 'snap_mobile_hero',
-        sectionType: 'mobile_hero',
-        pageUrl: finalUrl,
-        viewport: 'mobile',
-        cropRect: { cropX: 0, cropY: 0, cropWidth: 390, cropHeight: 844 },
-        mimeType: 'image/svg+xml'
-      }
-    ];
-
-    if (formCount > 0) {
-      snapshots.push({
-        id: 'snap_contact_form',
-        sectionType: 'contact_form',
-        pageUrl: finalUrl,
-        viewport: 'desktop',
-        cropRect: { cropX: 800, cropY: 180, cropWidth: 500, cropHeight: 600 },
-        mimeType: 'image/svg+xml'
-      });
-    }
-
-    const evidenceMap: WebsiteEvidenceMap = {
-      targetUrl: finalUrl,
-      crawledAt: new Date().toISOString(),
-      pages: crawlResults,
-      elements,
-      snapshots,
-      meta: {
-        title: pageTitle,
-        description: pageDescription,
-        hasTelLinks,
-        hasForms: formCount > 0,
-        formCount,
-        hasReviewsMarkup: homeHtml.includes('aggregateRating') || homeHtml.includes('reviewRating') || homeHtml.includes('★'),
-        detectedServiceArea: undefined,
-        detectedPhoneNumbers,
-        desktopLoadTimeMs: homeLoadDuration,
-        mobileLoadTimeMs: Math.round(homeLoadDuration * 1.1)
-      }
-    };
-
+    const evidenceMap = await crawlTargetWebsite(targetUrl);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       success: true,
-      totalPagesScanned: crawlResults.length,
+      totalPagesScanned: evidenceMap.pages.length,
       evidenceMap
     });
-
   } catch (err: any) {
-    return res.status(500).json({
+    return res.status(err.statusCode || 500).json({
       success: false,
-      errorType: 'SERVER_ERROR',
-      statusCode: 500,
-      message: `Crawl failed unexpectedly: ${err.message}`,
-      recovery: 'Try scanning again or switch to Manual Audit Mode to upload screenshots.'
+      errorType: err.errorType || 'SERVER_ERROR',
+      statusCode: err.statusCode || 500,
+      message: err.message || 'Crawl failed',
+      recovery: err.recovery || 'Try scanning again or switch to Manual Audit Mode.'
     });
   }
 }

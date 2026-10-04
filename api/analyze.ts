@@ -1,4 +1,5 @@
-import type { WebsiteEvidenceMap, AuditScoreItem, PriorityTier, AssessmentConfidence } from '../src/types';
+import type { WebsiteEvidenceMap, AuditScoreItem, PriorityTier, AssessmentConfidence } from '../src/types/index.js';
+import { checkApiAuth } from './auth.js';
 
 export interface ApiRequest {
   method?: string;
@@ -14,33 +15,7 @@ export interface ApiResponse {
 }
 
 function checkAuth(req: ApiRequest): { authorized: boolean; reason?: string; statusCode?: number } {
-  const secret = process.env.AUDIT_SECRET;
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  if (!secret) {
-    if (isProduction) {
-      return {
-        authorized: false,
-        statusCode: 503,
-        reason: 'Service Unavailable: AUDIT_SECRET environment variable is not configured on this production server.'
-      };
-    }
-    return { authorized: true };
-  }
-
-  const headerKey = (req.headers['x-audit-key'] || req.headers['X-Audit-Key']) as string;
-  const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string;
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-  if (headerKey === secret || bearerToken === secret) {
-    return { authorized: true };
-  }
-
-  return {
-    authorized: false,
-    statusCode: 401,
-    reason: 'Unauthorized: Invalid or missing audit credentials.'
-  };
+  return checkApiAuth(req);
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -160,7 +135,7 @@ Return strictly valid JSON with an array of "checks" and a "primaryPattern" summ
         });
 
         if (geminiRes.ok) {
-          const gData = await geminiRes.json();
+          const gData: any = await geminiRes.json();
           const parsed = JSON.parse(gData.candidates[0].content.parts[0].text);
           if (Array.isArray(parsed.checks)) {
             parsed.checks.forEach((c: any) => {

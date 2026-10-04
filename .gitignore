@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
@@ -8,6 +8,7 @@ coverage/
 
 # Production build artifacts
 dist/
+dist-api/
 build/
 
 # Environment variables & secrets

@@ -31,10 +31,9 @@ ENV PORT=3000
 # Copy node_modules and compiled output from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist-api ./dist-api
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.mjs ./server.mjs
-COPY --from=builder /app/api ./api
-COPY --from=builder /app/src/types ./src/types
 
 EXPOSE 3000
 

@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && tsc -p tsconfig.api.json",
+    "build:client": "vite build",
+    "build:api": "tsc -p tsconfig.api.json",
     "preview": "vite preview",
-    "start": "tsx server.mjs"
+    "start": "node server.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -25,6 +27,8 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "pdfjs-dist": "^6.3.289",
+    "playwright": "^1.63.0",
     "typescript": "^5.5.4",
     "vite": "^8.3.0"
   }

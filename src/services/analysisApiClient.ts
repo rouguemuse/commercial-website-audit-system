@@ -49,23 +49,50 @@ export interface CrawlAndAnalysisResult {
   };
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+export async function checkAuthStatus(): Promise<{
+  authRequired: boolean;
+  authenticated: boolean;
+  productionConfigured: boolean;
+}> {
   try {
-    const key =
-      (typeof window !== 'undefined' && (
-        localStorage.getItem('agency_audit_secret') ||
-        localStorage.getItem('audit_secret') ||
-        (import.meta as any).env?.VITE_AUDIT_SECRET
-      )) || '';
-    if (key) {
-      headers['x-audit-key'] = key;
-      headers['Authorization'] = `Bearer ${key}`;
+    const res = await fetch('/api/auth/status', { credentials: 'include' });
+    if (res.ok) {
+      return await res.json();
     }
-  } catch {
-    // Ignore localStorage access issues
+  } catch {}
+  return { authRequired: false, authenticated: true, productionConfigured: false };
+}
+
+export async function loginWithSecret(secret: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ secret })
+    });
+    const data = await res.json();
+    return { success: res.ok, error: data.error };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Login network error' };
   }
-  return headers;
+}
+
+export async function logout(): Promise<{ success: boolean }> {
+  try {
+    const res = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    return { success: res.ok };
+  } catch {
+    return { success: false };
+  }
+}
+
+function getAuthHeaders(): Record<string, string> {
+  // Session cookie is automatically attached via credentials: 'include'
+  return { 'Content-Type': 'application/json' };
 }
 
 export class AnalysisApiClient {
@@ -132,6 +159,7 @@ export class AnalysisApiClient {
       crawlRes = await fetch('/api/crawler', {
         method: 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ targetUrl: audit.websiteUrl })
       });
     } catch (networkErr: any) {
@@ -162,6 +190,7 @@ export class AnalysisApiClient {
     const analyzeRes = await fetch('/api/analyze', {
       method: 'POST',
       headers: getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify({
         businessName: audit.businessName,
         websiteUrl: audit.websiteUrl,
